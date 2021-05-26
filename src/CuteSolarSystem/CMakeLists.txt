@@ -6,8 +6,13 @@ target_link_libraries(glfw_imgui_vulk PUBLIC project_options CONAN_PKG::glfw CON
 target_include_directories(glfw_imgui_vulk PUBLIC ${CONAN_RES_DIRS_IMGUI}/bindings)
 target_compile_definitions(glfw_imgui_vulk PUBLIC GLFW_INCLUDE_NONE GLFW_INCLUDE_VULKAN)
 
-add_executable(app src/main.cpp)
+if(CMAKE_BUILD_TYPE EQUAL "Debug")
+  target_compile_definitions(glfw_imgui_vulk PUBLIC IMGUI_VULKAN_DEBUG_REPORT)
+endif(CMAKE_BUILD_TYPE EQUAL "Debug")
 
-target_link_libraries(app PRIVATE project_options project_warnings glfw_imgui_vulk)
+add_executable(app src/main.cpp src/RenderBackend.cpp src/RenderWindow.cpp)
+
+target_link_libraries(app PRIVATE project_options project_warnings glfw_imgui_vulk CONAN_PKG::spdlog)
+target_include_directories(app PRIVATE include)
 
 install(TARGETS app DESTINATION bin)
