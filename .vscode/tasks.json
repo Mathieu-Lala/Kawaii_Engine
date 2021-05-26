@@ -1,0 +1,46 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "App - Debug - Generate",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-DCMAKE_INSTALL_PREFIX:PATH=${workspaceFolder}/install",
+                "-DCMAKE_BUILD_TYPE=Debug",
+                "-B",
+                "${workspaceRoot}/build/Debug",
+                "${workspaceRoot}"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+        },
+        {
+            "label": "App - Debug - Build",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "${workspaceRoot}/build/Debug",
+                "--target",
+                "install"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+        },
+        {
+            "label": "App - Debug - Run",
+            "type": "shell",
+            "command": "./install/bin/app",
+            "args": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+        },
+    ]
+}

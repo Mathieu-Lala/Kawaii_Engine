@@ -1,0 +1,38 @@
+[requires]
+# Window / Monitor / Cursor
+glfw/3.3.2
+
+# GUI
+imgui/1.82
+
+# ECS
+entt/3.7.1
+
+# IO files
+stb/20190512@conan/stable
+
+# Mathematics
+glm/0.9.9.5@g-truc/stable
+
+# Serialisation
+# nlohmann_json/3.9.0
+
+# Logger
+spdlog/1.6.0
+
+# Syntax Sugar
+magic_enum/0.6.6
+
+# CLI11/1.9.1@cliutils/stable
+# benchmark/1.5.2@_/_
+# Catch2/2.11.1@catchorg/stable
+
+[options]
+spdlog:no_exceptions=True
+sfml:audio=False
+sfml:network=False
+
+[generators]
+cmake
+
+[imports]
