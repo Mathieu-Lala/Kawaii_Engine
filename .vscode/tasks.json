@@ -6,7 +6,7 @@
             "type": "shell",
             "command": "cmake",
             "args": [
-                "-DCMAKE_INSTALL_PREFIX:PATH=${workspaceFolder}/install",
+                "-DCMAKE_INSTALL_PREFIX:PATH=${workspaceFolder}/install/Debug",
                 "-DCMAKE_BUILD_TYPE=Debug",
                 "-B",
                 "${workspaceRoot}/build/Debug",
@@ -35,7 +35,54 @@
         {
             "label": "App - Debug - Run",
             "type": "shell",
-            "command": "./install/bin/app",
+            "command": "./bin/app",
+            "args": [],
+            "options": {
+                "cwd": "install/Debug/"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+        },
+        {
+            "label": "App - Release - Generate",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-DCMAKE_INSTALL_PREFIX:PATH=${workspaceFolder}/install/Release",
+                "-DCMAKE_BUILD_TYPE=Release",
+                "-B",
+                "${workspaceRoot}/build/Release",
+                "${workspaceRoot}"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+        },
+        {
+            "label": "App - Release - Build",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "${workspaceRoot}/build/Release",
+                "--target",
+                "install"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+        },
+        {
+            "label": "App - Release - Run",
+            "type": "shell",
+            "command": "./bin/app",
+            "options": {
+                "cwd": "install/Release/"
+            },
             "args": [],
             "group": {
                 "kind": "build",

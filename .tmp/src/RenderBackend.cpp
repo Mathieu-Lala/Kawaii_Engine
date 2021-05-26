@@ -1,5 +1,7 @@
 #include <cstdlib>
+
 #include <spdlog/spdlog.h>
+#include <imgui.h>
 
 #include "RenderBackend.hpp"
 
@@ -10,53 +12,86 @@ static void check_vk_result(VkResult err)
     if (err < 0) std::abort();
 }
 
-RenderBackend::RenderBackend(const char **extensions, uint32_t extensions_count)
+
+#ifdef IMGUI_VULKAN_DEBUG_REPORT
+static VKAPI_ATTR VkBool32 VKAPI_CALL debug_report(
+    [[maybe_unused]] VkDebugReportFlagsEXT flags,
+    VkDebugReportObjectTypeEXT objectType,
+    [[maybe_unused]] uint64_t object,
+    [[maybe_unused]] size_t location,
+    [[maybe_unused]] int32_t messageCode,
+    [[maybe_unused]] const char *pLayerPrefix,
+    const char *pMessage,
+    [[maybe_unused]] void *pUserData)
+{
+    spdlog::warn("[vulkan] Debug report from ObjectType: {}\nMessage: {}\n", objectType, pMessage);
+    return VK_FALSE;
+}
+#endif // IMGUI_VULKAN_DEBUG_REPORT
+
+RenderBackend::RenderBackend(std::vector<std::string> &&extensions)
 {
     VkResult err;
 
     // Create Vulkan Instance
     {
-        VkInstanceCreateInfo create_info = {};
-        create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-        create_info.enabledExtensionCount = extensions_count;
-        create_info.ppEnabledExtensionNames = extensions;
-#ifdef IMGUI_VULKAN_DEBUG_REPORT
-        // Enabling validation layers
-        const char *layers[] = {"VK_LAYER_KHRONOS_validation"};
-        create_info.enabledLayerCount = 1;
-        create_info.ppEnabledLayerNames = layers;
+        std::vector<const char *> cstrings;
+        cstrings.reserve(extensions.size());
+        for (auto &s : extensions) cstrings.push_back(&s[0]);
 
-        // Enable debug report extension (we need additional storage, so we duplicate the user array to add our new extension to it)
-        const char **extensions_ext = (const char **) malloc(sizeof(const char *) * (extensions_count + 1));
-        memcpy(extensions_ext, extensions, extensions_count * sizeof(const char *));
-        extensions_ext[extensions_count] = "VK_EXT_debug_report";
-        create_info.enabledExtensionCount = extensions_count + 1;
-        create_info.ppEnabledExtensionNames = extensions_ext;
+#ifdef IMGUI_VULKAN_DEBUG_REPORT
+        cstrings.push_back("VK_EXT_debug_report");
+        constexpr auto layers = std::to_array({"VK_LAYER_KHRONOS_validation"});
+#endif
+
+        VkApplicationInfo appInfo{
+            .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+            .pNext = nullptr,
+            .pApplicationName = "Hello Triangle",
+            .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+            .pEngineName = "No Engine",
+            .engineVersion = VK_MAKE_VERSION(1, 0, 0),
+            .apiVersion = VK_API_VERSION_1_0,
+        };
+
+        VkInstanceCreateInfo create_info = {
+            .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = 0,
+            .pApplicationInfo = &appInfo,
+#ifdef IMGUI_VULKAN_DEBUG_REPORT
+            // Enabling validation layers
+            .enabledLayerCount = 1,
+            .ppEnabledLayerNames = layers.data(),
+#else
+            .enabledLayerCount = 0,
+            .ppEnabledLayerNames = nullptr,
+#endif
+            .enabledExtensionCount = static_cast<uint32_t>(cstrings.size()),
+            .ppEnabledExtensionNames = cstrings.data(),
+        };
 
         // Create Vulkan Instance
         err = vkCreateInstance(&create_info, g_Allocator, &g_Instance);
         check_vk_result(err);
-        free(extensions_ext);
 
+#ifdef IMGUI_VULKAN_DEBUG_REPORT
         // Get the function pointer (required for any extensions)
-        auto vkCreateDebugReportCallbackEXT = (PFN_vkCreateDebugReportCallbackEXT) vkGetInstanceProcAddr(
-            g_Instance, "vkCreateDebugReportCallbackEXT");
-        IM_ASSERT(vkCreateDebugReportCallbackEXT != NULL);
+        auto vkCreateDebugReportCallbackEXT = reinterpret_cast<PFN_vkCreateDebugReportCallbackEXT>(
+            vkGetInstanceProcAddr(g_Instance, "vkCreateDebugReportCallbackEXT"));
+        IM_ASSERT(vkCreateDebugReportCallbackEXT != nullptr);
 
         // Setup the debug report callback
-        VkDebugReportCallbackCreateInfoEXT debug_report_ci = {};
-        debug_report_ci.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
-        debug_report_ci.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT
-                                | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
-        debug_report_ci.pfnCallback = debug_report;
-        debug_report_ci.pUserData = NULL;
+        VkDebugReportCallbackCreateInfoEXT debug_report_ci = {
+            .sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
+            .pNext = nullptr,
+            .flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT
+                     | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT,
+            .pfnCallback = debug_report,
+            .pUserData = nullptr,
+        };
         err = vkCreateDebugReportCallbackEXT(g_Instance, &debug_report_ci, g_Allocator, &g_DebugReport);
         check_vk_result(err);
-#else
-        // Create Vulkan Instance without any debug feature
-        err = vkCreateInstance(&create_info, g_Allocator, &g_Instance);
-        check_vk_result(err);
-        IM_UNUSED(g_DebugReport);
 #endif
     }
 
@@ -156,8 +191,8 @@ RenderBackend::~RenderBackend()
 
 #ifdef IMGUI_VULKAN_DEBUG_REPORT
     // Remove the debug report callback
-    auto vkDestroyDebugReportCallbackEXT = (PFN_vkDestroyDebugReportCallbackEXT) vkGetInstanceProcAddr(
-        g_Instance, "vkDestroyDebugReportCallbackEXT");
+    auto vkDestroyDebugReportCallbackEXT = reinterpret_cast<PFN_vkDestroyDebugReportCallbackEXT>(
+        vkGetInstanceProcAddr(g_Instance, "vkDestroyDebugReportCallbackEXT"));
     vkDestroyDebugReportCallbackEXT(g_Instance, g_DebugReport, g_Allocator);
 #endif // IMGUI_VULKAN_DEBUG_REPORT
 
