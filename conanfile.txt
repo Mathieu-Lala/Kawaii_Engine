@@ -1,4 +1,8 @@
 [requires]
+opengl/system
+
+glew/2.1.0
+
 # Window / Monitor / Cursor
 glfw/3.3.2
 
@@ -11,12 +15,13 @@ entt/3.7.1
 # IO files
 stb/20190512@conan/stable
 tinyobjloader/1.0.6@_/_
+# glslang/8.13.3559
 
 # Mathematics
 glm/0.9.9.5@g-truc/stable
 
 # Serialisation
-# nlohmann_json/3.9.0
+nlohmann_json/3.9.0
 
 # Logger
 spdlog/1.6.0
