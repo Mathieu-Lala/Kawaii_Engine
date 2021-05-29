@@ -11,6 +11,7 @@
 #include "graphics/Window.hpp"
 #include "EventProvider.hpp"
 #include "Event.hpp"
+#include "graphics/Shader.hpp"
 
 namespace kawe {
 
@@ -71,6 +72,36 @@ public:
 
     auto start()
     {
+        constexpr auto VERT_SH = R"(#version 450
+layout (location = 0) in vec3 inPos;
+layout (location = 1) in vec4 inColors;
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
+out vec4 fragColors;
+void main()
+{
+    gl_Position = projection * view * model * vec4(inPos, 1.0f);
+    fragColors = inColors;
+}
+)";
+
+        constexpr auto FRAG_SH = R"(#version 450
+in vec4 fragColors;
+out vec4 FragColor;
+void main()
+{
+    FragColor = fragColors;
+}
+)";
+
+        CALL_OPEN_GL(::glEnable(GL_DEPTH_TEST));
+        CALL_OPEN_GL(::glEnable(GL_BLEND));
+        CALL_OPEN_GL(::glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
+
+        Shader shader(VERT_SH, FRAG_SH);
+        shader.use();
+
         bool is_running = true;
         glm::ivec2 mouse_pos{};
 
@@ -133,6 +164,8 @@ public:
             glClearColor(CLEAR_COLOR.r, CLEAR_COLOR.g, CLEAR_COLOR.b, CLEAR_COLOR.a);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+            system_rendering();
+
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
             glfwSwapBuffers(window->get());
@@ -144,6 +177,8 @@ private:
     std::unique_ptr<Window> window;
 
     entt::registry world;
+
+    auto system_rendering() -> void {}
 };
 
 } // namespace kawe
