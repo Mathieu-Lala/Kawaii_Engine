@@ -55,6 +55,9 @@ public:
         if (!::ImGui_ImplOpenGL3_Init()) { return; }
 
         glfwSwapInterval(0);
+
+        // init dispatcher.
+        world.set<entt::dispatcher*>(&dispatcher);
     }
 
     ~Engine()
@@ -120,31 +123,44 @@ void main()
                     },
                     [&](const kawe::CloseWindow &) { is_running = false; },
 
-                    [&mouse_pos](const kawe::Moved<kawe::Mouse> &mouse) {
+                    [&](const kawe::Moved<kawe::Mouse> &mouse) {
                         mouse_pos = {mouse.source.x, mouse.source.y};
+                        dispatcher.trigger<kawe::Moved<kawe::Mouse>>(mouse);
                     },
                     [&](const kawe::Pressed<kawe::MouseButton> &e) {
                         window->useEvent(e);
+                        dispatcher.trigger<kawe::Pressed<kawe::MouseButton>>(e);
 
                         // state_mouse_button[static_cast<std::size_t>(magic_enum::enum_integer(e.source.button))]
                         // = true; mouse_pos_when_pressed = {e.source.mouse.x, e.source.mouse.y};
                     },
                     [&](const kawe::Released<kawe::MouseButton> &e) {
                         window->useEvent(e);
+                        dispatcher.trigger<kawe::Released<kawe::MouseButton>>(e);
 
                         // state_mouse_button[static_cast<std::size_t>(magic_enum::enum_integer(e.source.button))]
                         // = false;
                     },
                     [&](const kawe::Pressed<kawe::Key> &e) {
                         window->useEvent(e);
+                        dispatcher.trigger<kawe::Pressed<kawe::Key>>(e);
+
                         // keyboard_state[e.source.keycode] = true;
                     },
                     [&](const kawe::Released<kawe::Key> &e) {
                         window->useEvent(e);
+                        dispatcher.trigger<kawe::Released<kawe::Key>>(e);
+
                         // keyboard_state[e.source.keycode] = false;
                     },
-                    [&](const kawe::Character &e) { window->useEvent(e); },
-                    [&timeElapsed](const kawe::TimeElapsed &) { timeElapsed = true; },
+                    [&](const kawe::Character &e) {
+                        window->useEvent(e);
+                        dispatcher.trigger<kawe::Character>(e);
+                    },
+                    [&](const kawe::TimeElapsed &e) {
+                        timeElapsed = true;
+                        dispatcher.trigger<kawe::TimeElapsed>(e);
+                    },
                     [](const auto &) {}},
                 event);
 
@@ -175,6 +191,7 @@ void main()
 private:
     EventProvider events;
     std::unique_ptr<Window> window;
+    entt::dispatcher dispatcher;
 
     entt::registry world;
 
