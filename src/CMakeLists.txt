@@ -1,1 +1,1 @@
-add_subdirectory(CuteSolarSystem)
+add_subdirectory(KawaiiEngine)
