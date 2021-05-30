@@ -2,6 +2,11 @@
 
 #include <string_view>
 #include <string>
+#include <variant>
+
+#include <glm/glm.hpp>
+#include <magic_enum.hpp>
+#include <entt/entt.hpp>
 
 #include <GL/glew.h>
 
@@ -146,7 +151,7 @@ template<std::size_t D, typename T>
 struct Position {
     static constexpr std::string_view name{"Position"};
 
-    glm::vec<static_cast<int>(D), T> vec;
+    glm::vec<static_cast<int>(D), T> component;
 };
 
 using Position3f = Position<3, float>;
@@ -155,7 +160,7 @@ template<std::size_t D, typename T>
 struct Rotation {
     static constexpr std::string_view name{"Rotation"};
 
-    glm::vec<static_cast<int>(D), T> vec;
+    glm::vec<static_cast<int>(D), T> component;
 };
 
 using Rotation3f = Rotation<3, float>;
@@ -164,10 +169,18 @@ template<std::size_t D, typename T>
 struct Scale {
     static constexpr std::string_view name{"Scale"};
 
-    glm::vec<static_cast<int>(D), T> vec;
+    glm::vec<static_cast<int>(D), T> component;
 };
 
 using Scale3f = Scale<3, float>;
 
+struct Name {
+    static constexpr std::string_view name{"Name"};
+
+    std::string component;
+};
+
+using Component =
+    std::variant<std::monostate, VAO, EBO, VBO<VAO::Attribute::POSITION>, VBO<VAO::Attribute::COLOR>, Position3f, Rotation3f, Scale3f, Name>;
 
 } // namespace kawe

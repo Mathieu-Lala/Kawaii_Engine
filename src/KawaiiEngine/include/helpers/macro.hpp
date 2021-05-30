@@ -5,6 +5,7 @@
 #    include <stdexcept>
 // #    include <source_location>
 #    include <spdlog/spdlog.h>
+#    include <GL/glew.h>
 
 namespace kawe {
 
