@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <thread>
 
 #include <spdlog/spdlog.h>
 #include <glm/vec4.hpp>
@@ -15,14 +16,18 @@
 #include "component.hpp"
 #include "Camera.hpp"
 
+using namespace std::chrono_literals;
+
 namespace kawe {
 
 class Engine {
 public:
     Engine()
     {
-        constexpr auto KAWE_GLFW_MAJOR = 3;
-        constexpr auto KAWE_GLFW_MINOR = 3;
+        spdlog::set_level(spdlog::level::trace);
+
+        constexpr auto KAWE_GLFW_MAJOR = 4;
+        constexpr auto KAWE_GLFW_MINOR = 5;
 
         glfwSetErrorCallback([](int code, const char *message) {
             spdlog::error("[GLFW] An error occured '{}' 'code={}'\n", message, code);
@@ -58,7 +63,6 @@ public:
 
         glfwSwapInterval(0);
 
-        // init dispatcher.
         world.set<entt::dispatcher *>(&dispatcher);
     }
 
@@ -81,10 +85,13 @@ public:
         constexpr auto VERT_SH = R"(#version 450
 layout (location = 0) in vec3 inPos;
 layout (location = 1) in vec4 inColors;
+
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
+
 out vec4 fragColors;
+
 void main()
 {
     gl_Position = projection * view * model * vec4(inPos, 1.0f);
@@ -95,6 +102,7 @@ void main()
         constexpr auto FRAG_SH = R"(#version 450
 in vec4 fragColors;
 out vec4 FragColor;
+
 void main()
 {
     FragColor = fragColors;
@@ -113,11 +121,13 @@ void main()
 
         bool is_running = true;
 
-        glm::ivec2 mouse_pos{};
-        glm::ivec2 mouse_pos_when_pressed{};
+        glm::dvec2 mouse_pos{};
+        glm::dvec2 mouse_pos_when_pressed{};
 
-        std::array<bool, magic_enum::enum_integer(MouseButton::Button::BUTTON_LAST)> state_mouse_button;
-        std::fill(std::begin(state_mouse_button), std::end(state_mouse_button), false);
+        std::unordered_map<MouseButton::Button, bool> state_mouse_button;
+        for (const auto &i : magic_enum::enum_values<MouseButton::Button>()) {
+            state_mouse_button[i] = false;
+        }
 
         std::unordered_map<Key::Code, bool> keyboard_state;
         for (const auto &i : magic_enum::enum_values<Key::Code>()) { keyboard_state[i] = false; }
@@ -125,9 +135,6 @@ void main()
         on_create(world);
 
         while (is_running && !window->should_close()) {
-            // TODO : remove me
-            bool timeElapsed = false;
-
             const auto event = events.getNextEvent();
 
             std::visit(
@@ -136,105 +143,93 @@ void main()
                         events.setCurrentTimepoint(std::chrono::steady_clock::now());
                     },
                     [&](const kawe::CloseWindow &) { is_running = false; },
-
                     [&](const kawe::Moved<kawe::Mouse> &mouse) {
                         mouse_pos = {mouse.source.x, mouse.source.y};
                         dispatcher.trigger<kawe::Moved<kawe::Mouse>>(mouse);
                     },
                     [&](const kawe::Pressed<kawe::MouseButton> &e) {
                         window->useEvent(e);
-                        dispatcher.trigger<kawe::Pressed<kawe::MouseButton>>(e);
-
-                        state_mouse_button[static_cast<std::size_t>(magic_enum::enum_integer(e.source.button))] =
-                            true;
+                        state_mouse_button[e.source.button] = true;
                         mouse_pos_when_pressed = {e.source.mouse.x, e.source.mouse.y};
+                        dispatcher.trigger<kawe::Pressed<kawe::MouseButton>>(e);
                     },
                     [&](const kawe::Released<kawe::MouseButton> &e) {
                         window->useEvent(e);
+                        state_mouse_button[e.source.button] = false;
                         dispatcher.trigger<kawe::Released<kawe::MouseButton>>(e);
-
-                        state_mouse_button[static_cast<std::size_t>(magic_enum::enum_integer(e.source.button))] =
-                            false;
                     },
                     [&](const kawe::Pressed<kawe::Key> &e) {
                         window->useEvent(e);
-                        dispatcher.trigger<kawe::Pressed<kawe::Key>>(e);
-
                         keyboard_state[e.source.keycode] = true;
+                        dispatcher.trigger<kawe::Pressed<kawe::Key>>(e);
                     },
                     [&](const kawe::Released<kawe::Key> &e) {
                         window->useEvent(e);
-                        dispatcher.trigger<kawe::Released<kawe::Key>>(e);
-
                         keyboard_state[e.source.keycode] = false;
+                        dispatcher.trigger<kawe::Released<kawe::Key>>(e);
                     },
                     [&](const kawe::Character &e) {
                         window->useEvent(e);
                         dispatcher.trigger<kawe::Character>(e);
                     },
                     [&](const kawe::TimeElapsed &e) {
-                        timeElapsed = true;
-                        const auto dt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            std::get<TimeElapsed>(event).elapsed);
+                        const auto dt_nano = std::get<TimeElapsed>(event).elapsed;
+
+                        spdlog::trace("dt nano: {}", dt_nano.count());
 
                         if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) {
-                            for (auto i = 0ul; i != state_mouse_button.size(); i++) {
-                                if (state_mouse_button[i]) {
-                                    camera.handleMouseInput(
-                                        magic_enum::enum_cast<MouseButton::Button>(static_cast<int>(i)).value(),
-                                        mouse_pos,
-                                        mouse_pos_when_pressed,
-                                        dt_ms);
+                            for (const auto &[button, pressed] : state_mouse_button) {
+                                if (pressed) {
+                                    camera.handleMouseInput(button, mouse_pos, mouse_pos_when_pressed, dt_nano);
                                 }
                             }
                         }
 
+                        if (camera.hasChanged<Camera::Matrix::VIEW>()) {
+                            const auto view =
+                                glm::lookAt(camera.getPosition(), camera.getTargetCenter(), camera.getUp());
+                            shader.setUniform("view", view);
+                            camera.setChangedFlag<Camera::Matrix::VIEW>(false);
+                        }
+                        if (camera.hasChanged<Camera::Matrix::PROJECTION>()) {
+                            const auto projection = camera.getProjection();
+                            shader.setUniform("projection", projection);
+                            camera.setChangedFlag<Camera::Matrix::PROJECTION>(false);
+                        }
+
                         dispatcher.trigger<kawe::TimeElapsed>(e);
+
+                        ImGui_ImplOpenGL3_NewFrame();
+                        ImGui_ImplGlfw_NewFrame();
+                        ImGui::NewFrame();
+
+                        ImGui::ShowDemoWindow();
+
+                        on_imgui();
+
+                        ImGui::Render();
+
+                        constexpr auto CLEAR_COLOR = glm::vec4{0.0f, 1.0f, 0.2f, 1.0f};
+
+                        glClearColor(CLEAR_COLOR.r, CLEAR_COLOR.g, CLEAR_COLOR.b, CLEAR_COLOR.a);
+                        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+                        system_rendering(shader);
+
+                        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+                        glfwSwapBuffers(window->get());
                     },
                     [](const auto &) {}},
                 event);
-
-
-            if (camera.hasChanged<Camera::Matrix::VIEW>()) {
-                const auto view = glm::lookAt(camera.getPosition(), camera.getTargetCenter(), camera.getUp());
-                shader.setUniform("view", view);
-                camera.setChangedFlag<Camera::Matrix::VIEW>(false);
-            }
-            if (camera.hasChanged<Camera::Matrix::PROJECTION>()) {
-                const auto projection = camera.getProjection();
-                shader.setUniform("projection", projection);
-                camera.setChangedFlag<Camera::Matrix::PROJECTION>(false);
-            }
-
-
-            ImGui_ImplOpenGL3_NewFrame();
-            ImGui_ImplGlfw_NewFrame();
-            ImGui::NewFrame();
-
-            ImGui::ShowDemoWindow();
-
-            on_imgui();
-
-            ImGui::Render();
-
-            constexpr auto CLEAR_COLOR = glm::vec4{0.0f, 1.0f, 0.2f, 1.0f};
-
-            glClearColor(CLEAR_COLOR.r, CLEAR_COLOR.g, CLEAR_COLOR.b, CLEAR_COLOR.a);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-            system_rendering(shader);
-
-            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-            glfwSwapBuffers(window->get());
         }
     }
 
 private:
     EventProvider events;
     std::unique_ptr<Window> window;
-    entt::dispatcher dispatcher;
 
+    entt::dispatcher dispatcher;
     entt::registry world;
 
     auto system_rendering(Shader &shader) -> void
