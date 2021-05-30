@@ -59,6 +59,26 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt:
     }
 }
 
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const VAO &vao) const
+    -> void
+{
+    constexpr auto enum_name = magic_enum::enum_type_name<VAO::DisplayMode>();
+    auto display_mode = vao.mode;
+    if (ImGui::BeginCombo(
+            "##combo", fmt::format("{} = {}", enum_name.data(), magic_enum::enum_name(vao.mode)).data())) {
+        for (const auto &i : VAO::DISPLAY_MODES) {
+            const auto is_selected = vao.mode == i;
+            if (ImGui::Selectable(magic_enum::enum_name(i).data(), is_selected)) {
+                display_mode = i;
+                world.patch<VAO>(e, [&display_mode](VAO &component) { component.mode = display_mode; });
+            }
+            if (is_selected) { ImGui::SetItemDefaultFocus(); }
+        }
+        ImGui::EndCombo();
+    }
+}
+
 auto kawe::ComponentInspector::draw(entt::registry &world) -> void
 {
     ImGui::Begin("KAWE: Component Inspector");
@@ -75,30 +95,37 @@ auto kawe::ComponentInspector::draw(entt::registry &world) -> void
         ImGui::Separator();
 
         if (ImGui::BeginTabBar("##Tabs", ImGuiTabBarFlags_None)) {
-            const auto try_variant = [&world, this]<typename Variant>(entt::entity e) {
-                try {
-                    if (const auto component = world.try_get<Variant>(e); component != nullptr) {
-                        if (ImGui::BeginTabItem(Variant::name.data())) {
-                            drawComponentTweaker(world, selected.value(), *component);
-                            ImGui::SameLine();
-                            if (ImGui::Button(fmt::format("Delete Component###{}", Variant::name).data())) {
-                                spdlog::warn("Deleting component {} of {}", Variant::name, e);
-                                world.remove<Variant>(e);
-                            }
-                            ImGui::EndTabItem();
+            [try_variant = [&world, this]<typename Variant>(entt::entity e) {
+                if (const auto component = world.try_get<Variant>(e); component != nullptr) {
+                    if (ImGui::BeginTabItem(Variant::name.data())) {
+                        drawComponentTweaker(world, selected.value(), *component);
+                        ImGui::SameLine();
+                        if (ImGui::Button(fmt::format("Delete Component###{}", Variant::name).data())) {
+                            spdlog::warn("Deleting component {} of {}", Variant::name, e);
+                            world.remove<Variant>(e);
                         }
+                        ImGui::EndTabItem();
                     }
-                } catch (const std::exception &) {
                 }
-            };
-
-            const auto draw_component =
-                [&try_variant]<typename... T>(entt::entity entity, const std::variant<std::monostate, T...> &)
+            }]<typename... T>(entt::entity entity, const std::variant<std::monostate, T...> &)
             {
                 (try_variant.template operator()<T>(entity), ...);
-            };
+            }
+            (selected.value(), Component{});
 
-            draw_component(selected.value(), Component{});
+            if (ImGui::BeginTabItem("+")) {
+                [try_variant = [&world]<typename Variant>(entt::entity e) {
+                    if (const auto component = world.try_get<Variant>(e); component == nullptr) {
+                        if (ImGui::Selectable(Variant::name.data(), false)) { world.emplace<Variant>(e); }
+                    }
+                }]<typename... T>(entt::entity entity, const std::variant<std::monostate, T...> &)
+                {
+                    (try_variant.template operator()<T>(entity), ...);
+                }
+                (selected.value(), Component{});
+
+                ImGui::EndTabItem();
+            }
 
             ImGui::EndTabBar();
         }

@@ -180,7 +180,13 @@ struct Name {
     std::string component;
 };
 
+struct Velocity {
+    static constexpr std::string_view name{"Velocity"};
+
+    glm::dvec3 component;
+};
+
 using Component =
-    std::variant<std::monostate, VAO, EBO, VBO<VAO::Attribute::POSITION>, VBO<VAO::Attribute::COLOR>, Position3f, Rotation3f, Scale3f, Name>;
+    std::variant<std::monostate, VAO, EBO, VBO<VAO::Attribute::POSITION>, VBO<VAO::Attribute::COLOR>, Position3f, Rotation3f, Scale3f, Name, Velocity>;
 
 } // namespace kawe
