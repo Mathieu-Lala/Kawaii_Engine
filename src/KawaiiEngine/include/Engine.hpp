@@ -15,6 +15,7 @@
 #include "graphics/Shader.hpp"
 #include "component.hpp"
 #include "Camera.hpp"
+#include "resources/ResourceLoader.hpp"
 
 using namespace std::chrono_literals;
 
