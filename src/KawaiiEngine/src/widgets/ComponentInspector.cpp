@@ -79,6 +79,47 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt:
     }
 }
 
+template<std::size_t S, kawe::VAO::Attribute A>
+static auto stride_editor(
+    entt::registry &world,
+    entt::entity e,
+    const kawe::VBO<A> &vbo,
+    std::function<bool(std::size_t, std::array<float, S> &)> widget)
+{
+    std::size_t index = 0;
+    for (auto it = vbo.vertices.begin(); it != vbo.vertices.end(); it += static_cast<long>(vbo.stride_size)) {
+        std::array<float, S> stride{};
+        std::copy(it, it + static_cast<long>(vbo.stride_size), stride.begin());
+        if (widget(index, stride)) {
+            auto temp = vbo.vertices;
+            for (std::size_t i = 0; i != vbo.stride_size; i++) {
+                temp[index * vbo.stride_size + i] = stride[i];
+            }
+            kawe::VBO<A>::emplace(world, e, temp, vbo.stride_size);
+            return;
+        }
+        index++;
+    }
+}
+
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(
+    entt::registry &world, entt::entity e, const VBO<VAO::Attribute::POSITION> &vbo) const -> void
+{
+    stride_editor<3>(world, e, vbo, [&](auto index, auto &stride) {
+        return ImGui::InputFloat3(fmt::format("{}", index).data(), stride.data());
+    });
+}
+
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(
+    entt::registry &world, entt::entity e, const VBO<VAO::Attribute::COLOR> &vbo) const -> void
+{
+    stride_editor<4>(world, e, vbo, [&](auto index, auto &stride) {
+        return ImGui::ColorEdit4(fmt::format("{}", index).data(), stride.data());
+    });
+}
+
 auto kawe::ComponentInspector::draw(entt::registry &world) -> void
 {
     ImGui::Begin("KAWE: Component Inspector");

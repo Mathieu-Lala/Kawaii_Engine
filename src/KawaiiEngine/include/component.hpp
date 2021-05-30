@@ -71,13 +71,14 @@ struct VAO {
 template<VAO::Attribute A>
 struct VBO {
     static std::string name;
-    // static constexpr std::string_view name{"VBO" + magic_enum::enum_name(A)};
+    // static constexpr std::string_view name{"VBO::" + magic_enum::enum_name(A)};
 
     unsigned int object;
+    std::vector<float> vertices;
+    std::size_t stride_size;
 
-    template<std::size_t S>
     static auto
-        emplace(entt::registry &world, const entt::entity &entity, const std::array<float, S> &vertices, int stride_size)
+        emplace(entt::registry &world, const entt::entity &entity, const std::vector<float> &in_vertices, std::size_t in_stride_size)
             -> VBO<A> &
     {
         spdlog::trace("engine::core::VBO<{}>: emplace to {}", magic_enum::enum_name(A).data(), entity);
@@ -86,18 +87,63 @@ struct VBO {
         if (vao = world.try_get<VAO>(entity); !vao) { vao = &VAO::emplace(world, entity); }
         CALL_OPEN_GL(::glBindVertexArray(vao->object));
 
-        VBO<A> obj{0u};
+        VBO<A> obj{0u, std::move(in_vertices), in_stride_size};
         CALL_OPEN_GL(::glGenBuffers(1, &obj.object));
 
         CALL_OPEN_GL(::glBindBuffer(GL_ARRAY_BUFFER, obj.object));
-        CALL_OPEN_GL(::glBufferData(GL_ARRAY_BUFFER, S * sizeof(float), vertices.data(), GL_STATIC_DRAW));
+        CALL_OPEN_GL(::glBufferData(
+            GL_ARRAY_BUFFER,
+            static_cast<GLsizeiptr>(obj.vertices.size() * sizeof(float)),
+            obj.vertices.data(),
+            GL_STATIC_DRAW));
         CALL_OPEN_GL(::glVertexAttribPointer(
-            static_cast<GLuint>(A), stride_size, GL_FLOAT, GL_FALSE, stride_size * static_cast<int>(sizeof(float)), 0));
+            static_cast<GLuint>(A),
+            static_cast<GLint>(obj.stride_size),
+            GL_FLOAT,
+            GL_FALSE,
+            static_cast<GLsizei>(obj.stride_size * static_cast<int>(sizeof(float))),
+            0));
+        CALL_OPEN_GL(::glEnableVertexAttribArray(static_cast<GLuint>(A)));
+
+        world.patch<VAO>(
+            entity, [&obj](VAO &vao_obj) { vao_obj.count = static_cast<GLsizei>(obj.vertices.size()); });
+
+        return world.emplace_or_replace<VBO<A>>(entity, obj);
+    }
+
+    template<std::size_t S>
+    static auto emplace(
+        entt::registry &world,
+        const entt::entity &entity,
+        const std::array<float, S> &in_vertices,
+        std::size_t in_stride_size) -> VBO<A> &
+    {
+        return emplace(world, entity, std::vector<float>(in_vertices.begin(), in_vertices.end()), in_stride_size);
+        /*
+        spdlog::trace("engine::core::VBO<{}>: emplace to {}", magic_enum::enum_name(A).data(), entity);
+
+        const VAO *vao{nullptr};
+        if (vao = world.try_get<VAO>(entity); !vao) { vao = &VAO::emplace(world, entity); }
+        CALL_OPEN_GL(::glBindVertexArray(vao->object));
+
+        VBO<A> obj{0u, std::vector<float>(std::begin(in_vertices), std::end(in_vertices)), in_stride_size};
+        CALL_OPEN_GL(::glGenBuffers(1, &obj.object));
+
+        CALL_OPEN_GL(::glBindBuffer(GL_ARRAY_BUFFER, obj.object));
+        CALL_OPEN_GL(::glBufferData(GL_ARRAY_BUFFER, S * sizeof(float), in_vertices.data(), GL_STATIC_DRAW));
+        CALL_OPEN_GL(::glVertexAttribPointer(
+            static_cast<GLuint>(A),
+            in_stride_size,
+            GL_FLOAT,
+            GL_FALSE,
+            in_stride_size * static_cast<int>(sizeof(float)),
+            0));
         CALL_OPEN_GL(::glEnableVertexAttribArray(static_cast<GLuint>(A)));
 
         world.patch<VAO>(entity, [](VAO &vao_obj) { vao_obj.count = S; });
 
         return world.emplace<VBO<A>>(entity, obj);
+        */
     }
 
     static auto on_destroy(entt::registry &world, const entt::entity &entity) -> void
@@ -109,7 +155,7 @@ struct VBO {
 };
 
 template<VAO::Attribute A>
-std::string VBO<A>::name = std::string("VBO") + magic_enum::enum_name(A).data();
+std::string VBO<A>::name = std::string("VBO::") + magic_enum::enum_name(A).data();
 
 
 struct EBO {
