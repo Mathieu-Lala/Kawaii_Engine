@@ -8,7 +8,7 @@ add_library(kawaii_engine STATIC src/graphics/Window.cpp src/graphics/Shader.cpp
 
 target_link_libraries(
   kawaii_engine PUBLIC project_options project_warnings glfw_imgui_vulk CONAN_PKG::spdlog CONAN_PKG::glm CONAN_PKG::stb
-                       CONAN_PKG::nlohmann_json CONAN_PKG::tinyobjloader CONAN_PKG::magic_enum CONAN_PKG::entt)
+                       CONAN_PKG::nlohmann_json CONAN_PKG::tinyobjloader CONAN_PKG::magic_enum CONAN_PKG::entt CONAN_PKG::stb)
 target_include_directories(kawaii_engine PUBLIC include)
 
 install(TARGETS kawaii_engine DESTINATION lib)
