@@ -29,14 +29,12 @@ auto kawe::EventProvider::assign(const Window &window) -> void
 
     // // Prepare window
     // glfwSetFramebufferSizeCallback(window, framebuffer_size_handler);
-    // glfwSetWindowSizeCallback(window, window_resize_handler);
     // glfwSetWindowIconifyCallback(window, window_iconify_handler);
     // glfwSetWindowFocusCallback(window, window_focus_handler);
-    // glfwSetWindowCloseCallback(window, window_close_handler);
     // glfwSetErrorCallback(error_handler);
     //
     // // Set input callbacks
-    // glfwSetKeyCallback(window, keyboard_handler);
+    //  (window, keyboard_han  dler);
     // glfwSetCharCallback(window, char_input_handler);
     // glfwSetMouseButtonCallback(window, mouse_button_handler);
     // glfwSetCursorPosCallback(window, mouse_move_handler);
@@ -61,6 +59,7 @@ auto kawe::EventProvider::getNextEvent() -> Event
 
 auto kawe::EventProvider::getLastEvent() const noexcept -> const Event &
 {
+    // todo : replace this this something like std::find_last_where
     for (auto i = m_events_processed.size(); i; i--) {
         const auto &event = m_events_processed.at(i - 1);
         if (!std::holds_alternative<TimeElapsed>(event)) { return event; }
@@ -123,14 +122,14 @@ auto kawe::EventProvider::callback_eventMoved(GLFWwindow *, int x, int y) -> voi
 auto kawe::EventProvider::callback_eventKeyBoard(GLFWwindow *, int key, int scancode, int action, int mods) -> void
 {
     // clang-format off
-        const Key k{
-            .alt        = !!(mods & GLFW_MOD_ALT),
-            .control    = !!(mods & GLFW_MOD_CONTROL),
-            .system     = !!(mods & GLFW_MOD_SUPER),
-            .shift      = !!(mods & GLFW_MOD_SHIFT),
-            .scancode   = scancode,
-            .keycode    = magic_enum::enum_cast<Key::Code>(key).value_or(Key::Code::KEY_UNKNOWN)
-        };
+    const Key k{
+        .alt        = !!(mods & GLFW_MOD_ALT),
+        .control    = !!(mods & GLFW_MOD_CONTROL),
+        .system     = !!(mods & GLFW_MOD_SUPER),
+        .shift      = !!(mods & GLFW_MOD_SHIFT),
+        .scancode   = scancode,
+        .keycode    = magic_enum::enum_cast<Key::Code>(key).value_or(Key::Code::KEY_UNKNOWN)
+    };
     // clang-format on
     switch (action) {
     case GLFW_PRESS: s_instance->m_buffer_events.emplace_back(Pressed<Key>{k}); break;

@@ -17,13 +17,16 @@
 #include "Camera.hpp"
 #include "resources/ResourceLoader.hpp"
 
+#include "widgets/ComponentInspector.hpp"
+#include "widgets/EntityHierarchy.hpp"
+
 using namespace std::chrono_literals;
 
 namespace kawe {
 
 class Engine {
 public:
-    Engine()
+    Engine() : entity_hierarchy{component_inspector.selected}
     {
         spdlog::set_level(spdlog::level::trace);
 
@@ -176,7 +179,7 @@ void main()
                     [&](const kawe::TimeElapsed &e) {
                         const auto dt_nano = std::get<TimeElapsed>(event).elapsed;
 
-                        spdlog::trace("dt nano: {}", dt_nano.count());
+                        // spdlog::trace("dt nano: {}", dt_nano.count());
 
                         if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) {
                             for (const auto &[button, pressed] : state_mouse_button) {
@@ -208,6 +211,9 @@ void main()
 
                         on_imgui();
 
+                        entity_hierarchy.draw(world);
+                        component_inspector.draw(world);
+
                         ImGui::Render();
 
                         constexpr auto CLEAR_COLOR = glm::vec4{0.0f, 1.0f, 0.2f, 1.0f};
@@ -233,16 +239,19 @@ private:
     entt::dispatcher dispatcher;
     entt::registry world;
 
+    ComponentInspector component_inspector;
+    EntityHierarchy entity_hierarchy;
+
     auto system_rendering(Shader &shader) -> void
     {
         const auto render = [&shader]<bool has_ebo>(
                                 const VAO &vao, const Position3f &pos, const Rotation3f &rot, const Scale3f &scale) {
             auto model = glm::mat4(1.0f);
-            model = glm::translate(model, pos.vec);
-            model = glm::rotate(model, glm::radians(rot.vec.x), glm::vec3(1.0f, 0.0f, 0.0f));
-            model = glm::rotate(model, glm::radians(rot.vec.y), glm::vec3(0.0f, 1.0f, 0.0f));
-            model = glm::rotate(model, glm::radians(rot.vec.z), glm::vec3(0.0f, 0.0f, 1.0f));
-            model = glm::scale(model, scale.vec);
+            model = glm::translate(model, pos.component);
+            model = glm::rotate(model, glm::radians(rot.component.x), glm::vec3(1.0f, 0.0f, 0.0f));
+            model = glm::rotate(model, glm::radians(rot.component.y), glm::vec3(0.0f, 1.0f, 0.0f));
+            model = glm::rotate(model, glm::radians(rot.component.z), glm::vec3(0.0f, 0.0f, 1.0f));
+            model = glm::scale(model, scale.component);
             shader.setUniform("model", model);
 
             CALL_OPEN_GL(::glBindVertexArray(vao.object));
