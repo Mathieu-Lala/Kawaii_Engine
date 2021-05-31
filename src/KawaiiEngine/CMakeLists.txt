@@ -5,11 +5,12 @@ target_include_directories(glfw_imgui_vulk PUBLIC ${CONAN_RES_DIRS_IMGUI}/bindin
 target_compile_definitions(glfw_imgui_vulk PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLEW)
 
 add_library(kawaii_engine STATIC src/graphics/Window.cpp src/graphics/Shader.cpp src/EventProvider.cpp
-                                 src/widgets/ComponentInspector.cpp)
+                                 src/widgets/ComponentInspector.cpp
+                                 src/resources/ResourceLoader.cpp)
 
 target_link_libraries(
   kawaii_engine PUBLIC project_options project_warnings glfw_imgui_vulk CONAN_PKG::spdlog CONAN_PKG::glm CONAN_PKG::stb
-                       CONAN_PKG::nlohmann_json CONAN_PKG::tinyobjloader CONAN_PKG::magic_enum CONAN_PKG::entt)
+                       CONAN_PKG::nlohmann_json CONAN_PKG::tinyobjloader CONAN_PKG::magic_enum CONAN_PKG::entt CONAN_PKG::stb)
 target_include_directories(kawaii_engine PUBLIC include)
 target_compile_definitions(kawaii_engine PUBLIC MAGIC_ENUM_RANGE_MIN=0 MAGIC_ENUM_RANGE_MAX=512)
 
