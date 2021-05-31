@@ -12,10 +12,21 @@ namespace kawe {
     public:
         auto load(const std::string &filepath) const -> std::shared_ptr<Texture> {
 
-            // TODO: check the cache before loading a new file in memory.
-            auto texture = std::make_shared<Texture>(Texture{ filepath });
+            int width, height, channels;
 
-            return texture->is_initialised() ? texture : nullptr;
+            auto data = stbi_load(filepath.c_str(), &width, &height, &channels, 0);
+
+            if (!data) {
+                spdlog::error("couldn't load texture at '%s'.", filepath);
+                return nullptr;
+            }
+
+            // TODO: check the cache before loading a new file in memory.
+            return std::make_shared<Texture>(
+                Texture {
+                    width, height, channels, data
+                }
+            );
         }
     private:
         TextureCache _cache;
