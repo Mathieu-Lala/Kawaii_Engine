@@ -2,12 +2,12 @@
 
 #include <entt/entt.hpp>
 #include <spdlog/spdlog.h>
-#include "tiny_obj_loader.h"
+
+#define TINYOBJLOADER_IMPLEMENTATION
 
 // data structures.
 #include "Texture.hpp"
-
-#define TINYOBJLOADER_IMPLEMENTATION
+#include "Model.hpp"
 
 // ! pain
 // generates a loader class with the specified type and loader function.
@@ -38,6 +38,7 @@
 
 namespace kawe {
 
+    // creates a texture loader.
     CREATE_LOADER_CLASS(Texture,
         auto load(const std::string &filepath) -> std::shared_ptr<Texture> {
             int width, height, channels;
@@ -51,6 +52,22 @@ namespace kawe {
                     width, height, channels, data
                 }
             );
+        }
+    )
+
+    CREATE_LOADER_CLASS(Model,
+        auto load(const std::string &filepath) -> std::shared_ptr<Model> {
+            Model model {};
+            std::string err;
+
+            bool ret = tinyobj::LoadObj(&model.attrib, &model.shapes, &model.materials, &err, filepath.c_str());
+
+            if (!err.empty())
+                spdlog::error("%s", err);
+            if (!ret)
+                return nullptr;
+
+            return std::make_shared<Model>(model);
         }
     )
 
@@ -68,5 +85,6 @@ namespace kawe {
 
     private:
         CREATE_LOADER_INSTANCE(Texture)
+        CREATE_LOADER_INSTANCE(Model)
     };
 }
