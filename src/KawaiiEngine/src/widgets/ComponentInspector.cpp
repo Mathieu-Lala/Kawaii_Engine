@@ -60,23 +60,65 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt:
 }
 
 template<>
-auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const VAO &vao) const
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Render::VAO &vao) const
     -> void
 {
-    constexpr auto enum_name = magic_enum::enum_type_name<VAO::DisplayMode>();
+    constexpr auto enum_name = magic_enum::enum_type_name<Render::VAO::DisplayMode>();
     auto display_mode = vao.mode;
     if (ImGui::BeginCombo(
             "##combo", fmt::format("{} = {}", enum_name.data(), magic_enum::enum_name(vao.mode)).data())) {
-        for (const auto &i : VAO::DISPLAY_MODES) {
+        for (const auto &i : Render::VAO::DISPLAY_MODES) {
             const auto is_selected = vao.mode == i;
             if (ImGui::Selectable(magic_enum::enum_name(i).data(), is_selected)) {
                 display_mode = i;
-                world.patch<VAO>(e, [&display_mode](VAO &component) { component.mode = display_mode; });
+                world.patch<Render::VAO>(
+                    e, [&display_mode](Render::VAO &component) { component.mode = display_mode; });
             }
             if (is_selected) { ImGui::SetItemDefaultFocus(); }
         }
         ImGui::EndCombo();
     }
+}
+
+template<std::size_t S, kawe::Render::VAO::Attribute A>
+static auto stride_editor(
+    entt::registry &world,
+    entt::entity e,
+    const kawe::Render::VBO<A> &vbo,
+    std::function<bool(std::size_t, std::array<float, S> &)> widget)
+{
+    std::size_t index = 0;
+    for (auto it = vbo.vertices.begin(); it != vbo.vertices.end(); it += static_cast<long>(vbo.stride_size)) {
+        std::array<float, S> stride{};
+        std::copy(it, it + static_cast<long>(vbo.stride_size), stride.begin());
+        if (widget(index, stride)) {
+            auto temp = vbo.vertices;
+            for (std::size_t i = 0; i != vbo.stride_size; i++) {
+                temp[index * vbo.stride_size + i] = stride[i];
+            }
+            kawe::Render::VBO<A>::emplace(world, e, temp, vbo.stride_size);
+            return;
+        }
+        index++;
+    }
+}
+
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(
+    entt::registry &world, entt::entity e, const Render::VBO<Render::VAO::Attribute::POSITION> &vbo) const -> void
+{
+    stride_editor<3>(world, e, vbo, [&](auto index, auto &stride) {
+        return ImGui::InputFloat3(fmt::format("{}", index).data(), stride.data());
+    });
+}
+
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(
+    entt::registry &world, entt::entity e, const Render::VBO<Render::VAO::Attribute::COLOR> &vbo) const -> void
+{
+    stride_editor<4>(world, e, vbo, [&](auto index, auto &stride) {
+        return ImGui::ColorEdit4(fmt::format("{}", index).data(), stride.data());
+    });
 }
 
 auto kawe::ComponentInspector::draw(entt::registry &world) -> void
@@ -99,7 +141,7 @@ auto kawe::ComponentInspector::draw(entt::registry &world) -> void
                 if (const auto component = world.try_get<Variant>(e); component != nullptr) {
                     if (ImGui::BeginTabItem(Variant::name.data())) {
                         drawComponentTweaker(world, selected.value(), *component);
-                        ImGui::SameLine();
+                        // ImGui::SameLine();
                         if (ImGui::Button(fmt::format("Delete Component###{}", Variant::name).data())) {
                             spdlog::warn("Deleting component {} of {}", Variant::name, e);
                             world.remove<Variant>(e);
