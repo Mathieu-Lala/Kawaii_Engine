@@ -6,31 +6,37 @@
 
 #define TINYOBJLOADER_IMPLEMENTATION
 
+// generates a loader class with the specified type and loader function.
+// send your function as the second parameter.
+#define CREATE_LOADER_CLASS(type, ...)                                              \
+    using type ## Cache = entt::resource_cache<type>;                               \
+    class type ## Loader : public entt::resource_loader<type ## Loader, type> {     \
+    public:                                                                         \
+        __VA_ARGS__                                                                 \
+    private:                                                                        \
+        type ## Cache _cache;                                                       \
+    };
+
+// defines an object instance from the generated class.
+#define CREATE_LOADER_INSTANCE(type) type ## Loader _type ## Loader;
+
 namespace kawe {
-    using TextureCache = entt::resource_cache<Texture>;
-    class TextureLoader : public entt::resource_loader<TextureLoader, Texture> {
-    public:
-        auto load(const std::string &filepath) const -> std::shared_ptr<Texture> {
 
+    CREATE_LOADER_CLASS(Texture,
+        auto load_texture(const std::string &filepath) const -> std::shared_ptr<Texture> {
             int width, height, channels;
-
             auto data = stbi_load(filepath.c_str(), &width, &height, &channels, 0);
-
             if (!data) {
                 spdlog::error("couldn't load texture at '%s'.", filepath);
                 return nullptr;
             }
-
-            // TODO: check the cache before loading a new file in memory.
             return std::make_shared<Texture>(
                 Texture {
                     width, height, channels, data
                 }
             );
         }
-    private:
-        TextureCache _cache;
-    };
+    )
 
     // global resource loader class that encapsulate all
     // the sub-loaders.
@@ -46,6 +52,6 @@ namespace kawe {
         }
 
     private:
-        TextureLoader _textureLoader;
+        CREATE_LOADER_INSTANCE(Texture)
     };
 }
