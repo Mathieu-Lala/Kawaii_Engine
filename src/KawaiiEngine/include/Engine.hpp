@@ -67,6 +67,12 @@ public:
         glfwSwapInterval(0);
 
         world.set<entt::dispatcher *>(&dispatcher);
+#define SET_DESTRUCTOR(Type) world.on_destroy<Type>().connect<Type::on_destroy>()
+        SET_DESTRUCTOR(Render::VAO);
+        SET_DESTRUCTOR(Render::VBO<Render::VAO::Attribute::POSITION>);
+        SET_DESTRUCTOR(Render::VBO<Render::VAO::Attribute::COLOR>);
+        SET_DESTRUCTOR(Render::EBO);
+#undef SET_DESTRUCTOR
     }
 
     ~Engine()
@@ -229,6 +235,8 @@ void main()
                     [](const auto &) {}},
                 event);
         }
+
+        world.clear();
     }
 
 private:
@@ -243,23 +251,24 @@ private:
 
     auto system_rendering(Shader &shader) -> void
     {
-        const auto render = [&shader]<bool has_ebo>(
-                                const VAO &vao, const Position3f &pos, const Rotation3f &rot, const Scale3f &scale) {
-            auto model = glm::mat4(1.0f);
-            model = glm::translate(model, pos.component);
-            model = glm::rotate(model, glm::radians(rot.component.x), glm::vec3(1.0f, 0.0f, 0.0f));
-            model = glm::rotate(model, glm::radians(rot.component.y), glm::vec3(0.0f, 1.0f, 0.0f));
-            model = glm::rotate(model, glm::radians(rot.component.z), glm::vec3(0.0f, 0.0f, 1.0f));
-            model = glm::scale(model, scale.component);
-            shader.setUniform("model", model);
+        const auto render =
+            [&shader]<bool has_ebo>(
+                const Render::VAO &vao, const Position3f &pos, const Rotation3f &rot, const Scale3f &scale) {
+                auto model = glm::mat4(1.0f);
+                model = glm::translate(model, pos.component);
+                model = glm::rotate(model, glm::radians(rot.component.x), glm::vec3(1.0f, 0.0f, 0.0f));
+                model = glm::rotate(model, glm::radians(rot.component.y), glm::vec3(0.0f, 1.0f, 0.0f));
+                model = glm::rotate(model, glm::radians(rot.component.z), glm::vec3(0.0f, 0.0f, 1.0f));
+                model = glm::scale(model, scale.component);
+                shader.setUniform("model", model);
 
-            CALL_OPEN_GL(::glBindVertexArray(vao.object));
-            if constexpr (has_ebo) {
-                CALL_OPEN_GL(::glDrawElements(static_cast<GLenum>(vao.mode), vao.count, GL_UNSIGNED_INT, 0));
-            } else {
-                CALL_OPEN_GL(::glDrawArrays(static_cast<GLenum>(vao.mode), 0, vao.count));
-            }
-        };
+                CALL_OPEN_GL(::glBindVertexArray(vao.object));
+                if constexpr (has_ebo) {
+                    CALL_OPEN_GL(::glDrawElements(static_cast<GLenum>(vao.mode), vao.count, GL_UNSIGNED_INT, 0));
+                } else {
+                    CALL_OPEN_GL(::glDrawArrays(static_cast<GLenum>(vao.mode), 0, vao.count));
+                }
+            };
 
         [[maybe_unused]] static constexpr auto NO_POSITION = glm::vec3{0.0f, 0.0f, 0.0f};
         [[maybe_unused]] static constexpr auto NO_ROTATION = glm::vec3{0.0f, 0.0f, 0.0f};
@@ -270,83 +279,84 @@ private:
 
         // without ebo
 
-        world.view<VAO>(entt::exclude<EBO, Position3f, Rotation3f, Scale3f>).each([&render](const auto &vao) {
-            render.operator()<false>(vao, {NO_POSITION}, {NO_ROTATION}, {NO_SCALE});
-        });
+        world.view<Render::VAO>(entt::exclude<Render::EBO, Position3f, Rotation3f, Scale3f>)
+            .each([&render](const auto &vao) {
+                render.operator()<false>(vao, {NO_POSITION}, {NO_ROTATION}, {NO_SCALE});
+            });
 
-        world.view<VAO, Position3f>(entt::exclude<EBO, Rotation3f, Scale3f>)
+        world.view<Render::VAO, Position3f>(entt::exclude<Render::EBO, Rotation3f, Scale3f>)
             .each([&render](const auto &vao, const auto &pos) {
                 render.operator()<false>(vao, pos, {NO_ROTATION}, {NO_SCALE});
             });
 
-        world.view<VAO, Rotation3f>(entt::exclude<EBO, Position3f, Scale3f>)
+        world.view<Render::VAO, Rotation3f>(entt::exclude<Render::EBO, Position3f, Scale3f>)
             .each([&render](const auto &vao, const auto &rot) {
                 render.operator()<false>(vao, {NO_POSITION}, rot, {NO_SCALE});
             });
 
-        world.view<VAO, Scale3f>(entt::exclude<EBO, Position3f, Rotation3f>)
+        world.view<Render::VAO, Scale3f>(entt::exclude<Render::EBO, Position3f, Rotation3f>)
             .each([&render](const auto &vao, const auto &scale) {
                 render.operator()<false>(vao, {NO_POSITION}, {NO_ROTATION}, scale);
             });
 
-        world.view<VAO, Position3f, Scale3f>(entt::exclude<EBO, Rotation3f>)
+        world.view<Render::VAO, Position3f, Scale3f>(entt::exclude<Render::EBO, Rotation3f>)
             .each([&render](const auto &vao, const auto &pos, const auto &scale) {
                 render.operator()<false>(vao, pos, {NO_ROTATION}, scale);
             });
 
-        world.view<VAO, Rotation3f, Scale3f>(entt::exclude<EBO, Position3f>)
+        world.view<Render::VAO, Rotation3f, Scale3f>(entt::exclude<Render::EBO, Position3f>)
             .each([&render](const auto &vao, const auto &rot, const auto &scale) {
                 render.operator()<false>(vao, {NO_POSITION}, rot, scale);
             });
 
-        world.view<VAO, Position3f, Rotation3f>(entt::exclude<EBO, Scale3f>)
+        world.view<Render::VAO, Position3f, Rotation3f>(entt::exclude<Render::EBO, Scale3f>)
             .each([&render](const auto &vao, const auto &pos, const auto &rot) {
                 render.operator()<false>(vao, pos, rot, {NO_SCALE});
             });
 
-        world.view<VAO, Position3f, Rotation3f, Scale3f>(entt::exclude<EBO>)
+        world.view<Render::VAO, Position3f, Rotation3f, Scale3f>(entt::exclude<Render::EBO>)
             .each([&render](const auto &vao, const auto &pos, const auto &rot, const auto &scale) {
                 render.operator()<false>(vao, pos, rot, scale);
             });
 
         // with ebo
 
-        world.view<EBO, VAO>(entt::exclude<Position3f, Rotation3f, Scale3f>)
+        world.view<Render::EBO, Render::VAO>(entt::exclude<Position3f, Rotation3f, Scale3f>)
             .each([&render](const auto &, const auto &vao) {
                 render.operator()<true>(vao, {NO_POSITION}, {NO_ROTATION}, {NO_SCALE});
             });
 
-        world.view<EBO, VAO, Position3f>(entt::exclude<Rotation3f, Scale3f>)
+        world.view<Render::EBO, Render::VAO, Position3f>(entt::exclude<Rotation3f, Scale3f>)
             .each([&render](const auto &, const auto &vao, const auto &pos) {
                 render.operator()<true>(vao, pos, {NO_ROTATION}, {NO_SCALE});
             });
 
-        world.view<EBO, VAO, Rotation3f>(entt::exclude<Position3f, Scale3f>)
+        world.view<Render::EBO, Render::VAO, Rotation3f>(entt::exclude<Position3f, Scale3f>)
             .each([&render](const auto &, const auto &vao, const auto &rot) {
                 render.operator()<true>(vao, {NO_POSITION}, rot, {NO_SCALE});
             });
 
-        world.view<EBO, VAO, Scale3f>(entt::exclude<Position3f, Rotation3f>)
+        world.view<Render::EBO, Render::VAO, Scale3f>(entt::exclude<Position3f, Rotation3f>)
             .each([&render](const auto &, const auto &vao, const auto &scale) {
                 render.operator()<true>(vao, {NO_POSITION}, {NO_ROTATION}, scale);
             });
 
-        world.view<EBO, VAO, Position3f, Scale3f>(entt::exclude<Rotation3f>)
+        world.view<Render::EBO, Render::VAO, Position3f, Scale3f>(entt::exclude<Rotation3f>)
             .each([&render](const auto &, const auto &vao, const auto &pos, const auto &scale) {
                 render.operator()<true>(vao, pos, {NO_ROTATION}, scale);
             });
 
-        world.view<EBO, VAO, Rotation3f, Scale3f>(entt::exclude<Position3f>)
+        world.view<Render::EBO, Render::VAO, Rotation3f, Scale3f>(entt::exclude<Position3f>)
             .each([&render](const auto &, const auto &vao, const auto &rot, const auto &scale) {
                 render.operator()<true>(vao, {NO_POSITION}, rot, scale);
             });
 
-        world.view<EBO, VAO, Position3f, Rotation3f>(entt::exclude<Scale3f>)
+        world.view<Render::EBO, Render::VAO, Position3f, Rotation3f>(entt::exclude<Scale3f>)
             .each([&render](const auto &, const auto &vao, const auto &pos, const auto &rot) {
                 render.operator()<true>(vao, pos, rot, {NO_SCALE});
             });
 
-        world.view<EBO, VAO, Position3f, Rotation3f, Scale3f>().each(
+        world.view<Render::EBO, Render::VAO, Position3f, Rotation3f, Scale3f>().each(
             [&render](const auto &, const auto &vao, const auto &pos, const auto &rot, const auto &scale) {
                 render.operator()<true>(vao, pos, rot, scale);
             });

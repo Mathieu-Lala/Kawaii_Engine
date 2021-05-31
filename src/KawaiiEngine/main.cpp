@@ -49,12 +49,13 @@ int main()
     kawe::Engine engine{};
 
     engine.on_create = [](entt::registry &world) {
-        for (int y = -5; y != 5; y++) {
-            for (int x = -5; x != 5; x++) {
+        for (int y = 0; y != 100; y++) {
+            for (int x = 0; x != 100; x++) {
                 const auto cube = world.create();
-                kawe::VBO<kawe::VAO::Attribute::POSITION>::emplace(world, cube, data::cube_positions, 3);
-                kawe::VBO<kawe::VAO::Attribute::COLOR>::emplace(world, cube, data::cube_colors, 4);
-                kawe::EBO::emplace(world, cube, data::cube_indices);
+                kawe::Render::VBO<kawe::Render::VAO::Attribute::POSITION>::emplace(
+                    world, cube, data::cube_positions, 3);
+                kawe::Render::VBO<kawe::Render::VAO::Attribute::COLOR>::emplace(world, cube, data::cube_colors, 4);
+                kawe::Render::EBO::emplace(world, cube, data::cube_indices);
                 world.emplace<kawe::Position3f>(cube, glm::vec3{x, 0, y});
             }
         }
