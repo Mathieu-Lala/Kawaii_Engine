@@ -285,7 +285,7 @@ struct Mesh {
                     };
 
                 if (!uniqueVertices.contains(position)) {
-                    uniqueVertices[position] = static_cast<uint32_t>(vertices.size());
+                    uniqueVertices[position] = static_cast<uint32_t>(vertices.size() / 3);
 
                     // ! not really clean.
                     // TODO: find a better way to store vertices.
