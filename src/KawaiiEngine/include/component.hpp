@@ -5,10 +5,13 @@
 #include <variant>
 
 #include <glm/glm.hpp>
+#include <glm/gtx/hash.hpp>
 #include <magic_enum.hpp>
 #include <entt/entt.hpp>
 
 #include <GL/glew.h>
+
+#include "resources/ResourceLoader.hpp"
 
 namespace kawe {
 
@@ -145,7 +148,16 @@ struct Render {
 
         template<std::size_t S>
         static auto
-            emplace(entt::registry &world, const entt::entity &entity, const std::array<std::uint32_t, S> &vertices)
+            emplace(entt::registry &world, const entt::entity &entity, const std::array<std::uint32_t, S> &indices)
+                -> EBO &
+        {
+            return emplace(
+                world, entity, std::vector<std::uint32_t>(indices.begin(), indices.end())
+            );
+        }
+
+        static auto
+            emplace(entt::registry &world, const entt::entity &entity, const std::vector<std::uint32_t> &indices)
                 -> EBO &
         {
             spdlog::trace("engine::core::EBO: emplace of {}", entity);
@@ -159,9 +171,10 @@ struct Render {
 
             CALL_OPEN_GL(::glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, obj.object));
             CALL_OPEN_GL(
-                ::glBufferData(GL_ELEMENT_ARRAY_BUFFER, S * sizeof(float), vertices.data(), GL_STATIC_DRAW));
+                ::glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizei>(indices.size() * sizeof(uint32_t)), indices.data(), GL_STATIC_DRAW)
+            );
 
-            world.patch<VAO>(entity, [](VAO &vao_obj) { vao_obj.count = S; });
+            world.patch<VAO>(entity, [&indices](VAO &vao_obj) { vao_obj.count =  static_cast<GLsizei>(indices.size()); });
 
             return world.emplace<EBO>(entity);
         }
@@ -217,6 +230,94 @@ struct Velocity {
     glm::dvec3 component;
 };
 
+struct Mesh {
+    static constexpr std::string_view name{"Mesh"};
+
+    std::vector<float> vertices;
+    std::vector<glm::vec3> normals;
+    std::vector<glm::vec2> texcoords;
+    std::vector<uint32_t> indices;
+
+    static auto emplace(entt::registry &world, const entt::entity &entity, const std::string &filepath)
+        // -> Mesh & :: should be the right stuff to return for serialization.
+        -> std::optional<std::reference_wrapper<Mesh>>
+    {
+        // fetching the desired model.
+        auto loader = world.ctx<ResourceLoader*>();
+        auto model = loader->load<kawe::Model>(filepath);
+
+        if (!model)
+            return std::nullopt;
+
+        // TODO: reserve the exact amount of space.
+        std::vector<float> vertices;
+        std::vector<glm::vec3> normals;
+        std::vector<glm::vec2> texcoords;
+        std::vector<uint32_t> indices;
+
+        // possible using glm/gtx/hash header.
+        std::unordered_map<glm::vec3, uint32_t> uniqueVertices;
+
+        // TODO: move this code into the model loader.
+        for (const auto& shape : model->shapes) {
+            for (const auto& index : shape.mesh.indices) {
+
+                glm::vec3 position {
+                    model->attributes.vertices[3 * size_t(index.vertex_index) + 0],
+                    model->attributes.vertices[3 * size_t(index.vertex_index) + 1],
+                    model->attributes.vertices[3 * size_t(index.vertex_index) + 2]
+                };
+
+                glm::vec3 normal { glm::vec3(0.0) };
+                glm::vec2 texcoord { glm::vec2(0.0) };
+
+                if (index.normal_index >= 0)
+                    normal = {
+                        model->attributes.normals[3 * size_t(index.normal_index) + 0],
+                        model->attributes.normals[3 * size_t(index.normal_index) + 1],
+                        model->attributes.normals[3 * size_t(index.normal_index) + 2]
+                    };
+
+                if (index.texcoord_index >= 0)
+                    texcoord = {
+                        model->attributes.texcoords[2 * size_t(index.texcoord_index) + 0],
+                        model->attributes.texcoords[2 * size_t(index.texcoord_index) + 1],
+                    };
+
+                if (!uniqueVertices.contains(position)) {
+                    uniqueVertices[position] = static_cast<uint32_t>(vertices.size());
+
+                    // ! not really clean.
+                    // TODO: find a better way to store vertices.
+                    vertices.push_back(position.x);
+                    vertices.push_back(position.y);
+                    vertices.push_back(position.z);
+
+                    normals.push_back(normal);
+                    texcoords.push_back(texcoord);
+                }
+
+                indices.push_back(uniqueVertices[position]);
+            }
+        }
+
+        // creating a new mesh from extracted data.
+        Mesh mesh { vertices, normals, texcoords, indices };
+
+        const Render::VAO *vao{nullptr};
+        if (vao = world.try_get<Render::VAO>(entity); !vao) {
+            vao = &Render::VAO::emplace(world, entity);
+        }
+
+        // TODO: support normals & texcoords.
+        // TODO: check if VAO & EBO aren't already emplaced.
+        kawe::Render::VBO<kawe::Render::VAO::Attribute::POSITION>::emplace(world, entity, vertices, 3);
+        kawe::Render::EBO::emplace(world, entity, indices);
+
+        return std::optional<std::reference_wrapper<Mesh>> { world.emplace<Mesh>(entity, mesh) };
+    }
+};
+
 using Component = std::variant<
     std::monostate,
     Render::VAO,
@@ -227,6 +328,7 @@ using Component = std::variant<
     Rotation3f,
     Scale3f,
     Name,
-    Velocity>;
+    Velocity,
+    Mesh>;
 
 } // namespace kawe
