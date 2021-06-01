@@ -100,6 +100,12 @@ int main()
         player = std::make_shared<Player>(e, world);
         world.ctx<entt::dispatcher *>()->sink<kawe::Pressed<kawe::Key>>().connect<&Player::on_key_pressed>(
             player.get());
+
+        const auto model = world.create();
+
+        kawe::Mesh::emplace(
+            world, model, "../../../dependencies/Kawaii_Engine/src/KawaiiEngine/asset/models/viking_room.obj");
+        world.emplace<kawe::Position3f>(model, glm::vec3(0.0f));
     };
 
     engine.on_imgui = []() {

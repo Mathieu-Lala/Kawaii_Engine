@@ -1,5 +1,8 @@
 #pragma once
 
+#define TINYOBJLOADER_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
+
 #include <memory>
 #include <thread>
 
@@ -68,6 +71,7 @@ public:
         glfwSwapInterval(0);
 
         world.set<entt::dispatcher *>(&dispatcher);
+        world.set<ResourceLoader *>(&loader);
 #define SET_DESTRUCTOR(Type) world.on_destroy<Type>().connect<Type::on_destroy>()
         SET_DESTRUCTOR(Render::VAO);
         SET_DESTRUCTOR(Render::VBO<Render::VAO::Attribute::POSITION>);
@@ -262,6 +266,7 @@ private:
     EventProvider events;
     std::unique_ptr<Window> window;
 
+    ResourceLoader loader;
     entt::dispatcher dispatcher;
     entt::registry world;
 
