@@ -110,30 +110,6 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt:
     }
 }
 
-template<>
-auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Mesh &) const
-    -> void
-{
-    ImGuiFileDialog::Instance()->SetExtentionInfos(".obj", ImVec4(1.0f, 1.0f, 0.0f, 0.9f));
-
-    if (ImGui::Button("From File"))
-        ImGuiFileDialog::Instance()->OpenDialog("kawe::Inspect::Mesh", "Choose File", ".obj", ".");
-
-    if (ImGuiFileDialog::Instance()->Display("kawe::Inspect::Mesh")) {
-        if (ImGuiFileDialog::Instance()->IsOk()) {
-            const auto path = ImGuiFileDialog::Instance()->GetFilePathName();
-
-            world.remove_if_exists<Render::VBO<Render::VAO::Attribute::POSITION>>(e);
-            world.remove_if_exists<Render::VBO<Render::VAO::Attribute::COLOR>>(e);
-            world.remove_if_exists<Render::VBO<Render::VAO::Attribute::NORMALS>>(e);
-
-            Mesh::emplace(world, e, path);
-        }
-
-        ImGuiFileDialog::Instance()->Close();
-    }
-}
-
 template<std::size_t S, kawe::Render::VAO::Attribute A>
 static auto stride_editor(
     entt::registry &world,
@@ -173,6 +149,36 @@ auto kawe::ComponentInspector::drawComponentTweaker(
     stride_editor<4>(world, e, vbo, [&](auto index, auto &stride) {
         return ImGui::ColorEdit4(fmt::format("{}", index).data(), stride.data());
     });
+}
+
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Mesh &mesh) const
+    -> void
+{
+    ImGui::Text("path: %s", mesh.filepath.c_str());
+    ImGui::Text("model: %s", mesh.model_name.c_str());
+    ImGui::Text("loaded successfully: %s", mesh.loaded_successfully ? "Yes" : "No");
+
+    ImGuiFileDialog::Instance()->SetExtentionInfos(".obj", ImVec4(1.0f, 1.0f, 0.0f, 0.9f));
+
+    if (ImGui::Button("From File"))
+        ImGuiFileDialog::Instance()->OpenDialog("kawe::Inspect::Mesh", "Choose File", ".obj", ".");
+
+    if (ImGuiFileDialog::Instance()->Display("kawe::Inspect::Mesh")) {
+        if (ImGuiFileDialog::Instance()->IsOk()) {
+            const auto path = ImGuiFileDialog::Instance()->GetFilePathName();
+
+            world.remove_if_exists<Render::VBO<Render::VAO::Attribute::POSITION>>(e);
+            world.remove_if_exists<Render::VBO<Render::VAO::Attribute::COLOR>>(e);
+            world.remove_if_exists<Render::VBO<Render::VAO::Attribute::NORMALS>>(e);
+            world.remove_if_exists<Render::EBO>(e);
+            world.remove_if_exists<Render::VAO>(e);
+
+            Mesh::emplace(world, e, path);
+        }
+
+        ImGuiFileDialog::Instance()->Close();
+    }
 }
 
 auto kawe::ComponentInspector::draw(entt::registry &world) -> void

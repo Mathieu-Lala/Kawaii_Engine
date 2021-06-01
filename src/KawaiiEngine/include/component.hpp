@@ -1,11 +1,11 @@
 #pragma once
 
 #include <string_view>
+#include <filesystem>
 #include <string>
 #include <variant>
 
 #include <glm/glm.hpp>
-#include <glm/gtx/hash.hpp>
 #include <magic_enum.hpp>
 #include <entt/entt.hpp>
 
@@ -247,82 +247,37 @@ using Gravitable3f = Gravitable<3, float>;
 struct Mesh {
     static constexpr std::string_view name{"Mesh"};
 
-    std::vector<float> vertices;
-    std::vector<glm::vec3> normals;
-    std::vector<glm::vec2> texcoords;
-    std::vector<uint32_t> indices;
+    std::string filepath;
+    std::string model_name;
+
+    bool loaded_successfully;
 
     static auto emplace(entt::registry &world, const entt::entity &entity, const std::string &filepath)
-        // -> Mesh & :: should be the right stuff to return for serialization.
-        -> std::optional<std::reference_wrapper<Mesh>>
+        -> Mesh &
     {
-        // fetching the desired model.
         auto loader = world.ctx<ResourceLoader *>();
         auto model = loader->load<kawe::Model>(filepath);
 
-        if (!model) return std::nullopt;
+        Mesh mesh { filepath, std::filesystem::path(filepath).filename(), false };
 
-        // TODO: reserve the exact amount of space.
-        std::vector<float> vertices;
-        std::vector<glm::vec3> normals;
-        std::vector<glm::vec2> texcoords;
-        std::vector<uint32_t> indices;
+        spdlog::info(mesh.filepath);
+        spdlog::info(mesh.model_name);
+        spdlog::info(mesh.loaded_successfully);
 
-        // possible using glm/gtx/hash header.
-        std::unordered_map<glm::vec3, uint32_t> uniqueVertices;
-
-        // TODO: move this code into the model loader.
-        for (const auto &shape : model->shapes) {
-            for (const auto &index : shape.mesh.indices) {
-                glm::vec3 position{
-                    model->attributes.vertices[3 * size_t(index.vertex_index) + 0],
-                    model->attributes.vertices[3 * size_t(index.vertex_index) + 1],
-                    model->attributes.vertices[3 * size_t(index.vertex_index) + 2]};
-
-                glm::vec3 normal{glm::vec3(0.0)};
-                glm::vec2 texcoord{glm::vec2(0.0)};
-
-                if (index.normal_index >= 0)
-                    normal = {
-                        model->attributes.normals[3 * size_t(index.normal_index) + 0],
-                        model->attributes.normals[3 * size_t(index.normal_index) + 1],
-                        model->attributes.normals[3 * size_t(index.normal_index) + 2]};
-
-                if (index.texcoord_index >= 0)
-                    texcoord = {
-                        model->attributes.texcoords[2 * size_t(index.texcoord_index) + 0],
-                        model->attributes.texcoords[2 * size_t(index.texcoord_index) + 1],
-                    };
-
-                if (!uniqueVertices.contains(position)) {
-                    uniqueVertices[position] = static_cast<uint32_t>(vertices.size() / 3);
-
-                    // ! not really clean.
-                    // TODO: find a better way to store vertices.
-                    vertices.push_back(position.x);
-                    vertices.push_back(position.y);
-                    vertices.push_back(position.z);
-
-                    normals.push_back(normal);
-                    texcoords.push_back(texcoord);
-                }
-
-                indices.push_back(uniqueVertices[position]);
-            }
-        }
-
-        // creating a new mesh from extracted data.
-        Mesh mesh{vertices, normals, texcoords, indices};
+        if (!model)
+            return world.emplace<Mesh>(entity, mesh);
 
         const Render::VAO *vao{nullptr};
         if (vao = world.try_get<Render::VAO>(entity); !vao) { vao = &Render::VAO::emplace(world, entity); }
 
         // TODO: support normals & texcoords.
         // TODO: check if VAO & EBO aren't already emplaced.
-        kawe::Render::VBO<kawe::Render::VAO::Attribute::POSITION>::emplace(world, entity, vertices, 3);
-        kawe::Render::EBO::emplace(world, entity, indices);
+        kawe::Render::VBO<kawe::Render::VAO::Attribute::POSITION>::emplace(world, entity, model->vertices, 3);
+        kawe::Render::EBO::emplace(world, entity, model->indices);
 
-        return std::optional<std::reference_wrapper<Mesh>>{world.emplace_or_replace<Mesh>(entity, mesh)};
+        mesh.loaded_successfully = true;
+
+        return world.emplace_or_replace<Mesh>(entity, mesh);
     }
 };
 
