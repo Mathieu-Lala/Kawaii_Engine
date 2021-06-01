@@ -26,15 +26,10 @@ target_compile_definitions(kawaii_engine PUBLIC MAGIC_ENUM_RANGE_MIN=0 MAGIC_ENU
 
 install(TARGETS kawaii_engine DESTINATION lib)
 
-# install(DIRECTORY asset DESTINATION .)
+install(DIRECTORY asset DESTINATION .)
 
 # add_custom_target(vert.spv ALL COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/asset/shader/shader.vert -o vert.spv)
 # install(FILES ${CMAKE_CURRENT_BINARY_DIR}/vert.spv DESTINATION asset/shader)
 #
 # add_custom_target(frag.spv ALL COMMAND glslc ${CMAKE_CURRENT_SOURCE_DIR}/asset/shader/shader.frag -o frag.spv)
 # install(FILES ${CMAKE_CURRENT_BINARY_DIR}/frag.spv DESTINATION asset/shader)
-
-add_executable(app main.cpp)
-target_link_libraries(app PUBLIC kawaii_engine)
-
-install(TARGETS app DESTINATION bin)
