@@ -76,7 +76,6 @@ struct Render {
     template<VAO::Attribute A>
     struct VBO {
         static std::string name;
-        // static constexpr std::string_view name{"VBO::" + magic_enum::enum_name(A)};
 
         unsigned int object;
         std::vector<float> vertices;
@@ -177,7 +176,7 @@ struct Render {
             world.patch<VAO>(
                 entity, [&indices](VAO &vao_obj) { vao_obj.count = static_cast<GLsizei>(indices.size()); });
 
-            return world.emplace<EBO>(entity);
+            return world.emplace_or_replace<EBO>(entity);
         }
 
         static auto on_destroy(entt::registry &world, const entt::entity &entity) -> void
@@ -323,7 +322,7 @@ struct Mesh {
         kawe::Render::VBO<kawe::Render::VAO::Attribute::POSITION>::emplace(world, entity, vertices, 3);
         kawe::Render::EBO::emplace(world, entity, indices);
 
-        return std::optional<std::reference_wrapper<Mesh>>{world.emplace<Mesh>(entity, mesh)};
+        return std::optional<std::reference_wrapper<Mesh>>{world.emplace_or_replace<Mesh>(entity, mesh)};
     }
 };
 

@@ -110,6 +110,30 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt:
     }
 }
 
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Mesh &) const
+    -> void
+{
+    ImGuiFileDialog::Instance()->SetExtentionInfos(".obj", ImVec4(1.0f, 1.0f, 0.0f, 0.9f));
+
+    if (ImGui::Button("From File"))
+        ImGuiFileDialog::Instance()->OpenDialog("kawe::Inspect::Mesh", "Choose File", ".obj", ".");
+
+    if (ImGuiFileDialog::Instance()->Display("kawe::Inspect::Mesh")) {
+        if (ImGuiFileDialog::Instance()->IsOk()) {
+            const auto path = ImGuiFileDialog::Instance()->GetFilePathName();
+
+            world.remove_if_exists<Render::VBO<Render::VAO::Attribute::POSITION>>(e);
+            world.remove_if_exists<Render::VBO<Render::VAO::Attribute::COLOR>>(e);
+            world.remove_if_exists<Render::VBO<Render::VAO::Attribute::NORMALS>>(e);
+
+            Mesh::emplace(world, e, path);
+        }
+
+        ImGuiFileDialog::Instance()->Close();
+    }
+}
+
 template<std::size_t S, kawe::Render::VAO::Attribute A>
 static auto stride_editor(
     entt::registry &world,
