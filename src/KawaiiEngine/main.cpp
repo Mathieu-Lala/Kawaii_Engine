@@ -48,17 +48,12 @@ int main()
 {
     kawe::Engine engine{};
 
-    engine.on_create = [](entt::registry &world) {
-        for (int y = 0; y != 100; y++) {
-            for (int x = 0; x != 100; x++) {
-                const auto cube = world.create();
-                kawe::Render::VBO<kawe::Render::VAO::Attribute::POSITION>::emplace(
-                    world, cube, data::cube_positions, 3);
-                kawe::Render::VBO<kawe::Render::VAO::Attribute::COLOR>::emplace(world, cube, data::cube_colors, 4);
-                kawe::Render::EBO::emplace(world, cube, data::cube_indices);
-                world.emplace<kawe::Position3f>(cube, glm::vec3{x, 0, y});
-            }
-        }
+    engine.on_create = []([[maybe_unused]]entt::registry &world) {
+
+        auto model = world.create();
+
+        kawe::Mesh::emplace(world, model, "../../../dependencies/Kawaii_Engine/src/KawaiiEngine/asset/models/viking_room.obj");
+        world.emplace<kawe::Position3f>(model, glm::vec3(0.0f));
     };
 
     engine.on_imgui = []() {

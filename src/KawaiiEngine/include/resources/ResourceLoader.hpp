@@ -3,7 +3,7 @@
 #include <entt/entt.hpp>
 #include <spdlog/spdlog.h>
 
-#define TINYOBJLOADER_IMPLEMENTATION
+#include "stb_image.h"
 
 // data structures.
 #include "Texture.hpp"
@@ -32,7 +32,7 @@
 // leading to the global loader class to be able to call youre loader.
 #define CREATE_LOADER_CALLER(type)                                                                      \
     template<>                                                                                          \
-    auto kawe::ResourceLoader::load(const std::string &filepath) -> std::shared_ptr<type> {   \
+    auto kawe::ResourceLoader::load(const std::string &filepath) -> std::shared_ptr<type> {             \
         return _ ## type ## Loader.load(filepath);                                                      \
     }
 
@@ -44,7 +44,7 @@ namespace kawe {
             int width, height, channels;
             auto data = stbi_load(filepath.c_str(), &width, &height, &channels, 0);
             if (!data) {
-                spdlog::error("couldn't load texture at '%s'.", filepath);
+                spdlog::error("couldn't load texture at '{}'.", filepath);
                 return nullptr;
             }
             return std::make_shared<Texture>(
@@ -55,18 +55,23 @@ namespace kawe {
         }
     )
 
+    // creates a model loader.
     CREATE_LOADER_CLASS(Model,
         auto load(const std::string &filepath) -> std::shared_ptr<Model> {
             Model model {};
             std::string err;
 
-            bool ret = tinyobj::LoadObj(&model.attrib, &model.shapes, &model.materials, &err, filepath.c_str());
+            bool ret = tinyobj::LoadObj(&model.attributes, &model.shapes, &model.materials, &err, filepath.c_str());
 
             if (!err.empty())
-                spdlog::error("%s", err);
-            if (!ret)
-                return nullptr;
+                spdlog::error("{}", err);
 
+            if (!ret) {
+                spdlog::error("failed to load model.");
+                return nullptr;
+            }
+
+            spdlog::info("model at '{}' loaded successfully.", filepath);
             return std::make_shared<Model>(model);
         }
     )
@@ -79,9 +84,7 @@ namespace kawe {
         ~ResourceLoader() = default;
 
         template<typename T>
-        auto load(const std::string &filepath) -> std::shared_ptr<T> {
-            return nullptr;
-        }
+        auto load([[maybe_unused]] const std::string &filepath) -> std::shared_ptr<T>;
 
     private:
         CREATE_LOADER_INSTANCE(Texture)

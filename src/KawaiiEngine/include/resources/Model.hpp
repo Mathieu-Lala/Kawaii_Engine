@@ -10,6 +10,6 @@ namespace kawe {
 
         std::vector<tinyobj::shape_t> shapes;
         std::vector<tinyobj::material_t> materials;
-        tinyobj::attrib_t attrib;
+        tinyobj::attrib_t attributes;
     };
 }
