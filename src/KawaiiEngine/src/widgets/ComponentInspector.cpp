@@ -2,6 +2,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include <ImGuiFileDialog.h>
+
 #include "helpers/macro.hpp"
 #include "component.hpp"
 #include "widgets/ComponentInspector.hpp"
