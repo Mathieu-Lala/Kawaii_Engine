@@ -2,6 +2,8 @@
 
 #include <entt/entt.hpp>
 #include <spdlog/spdlog.h>
+
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp>
 
 #include "stb_image.h"
