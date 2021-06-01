@@ -48,17 +48,58 @@ int main()
 {
     kawe::Engine engine{};
 
-    engine.on_create = [](entt::registry &world) {
-        for (int y = 0; y != 100; y++) {
-            for (int x = 0; x != 100; x++) {
+    struct Player {
+        entt::entity entity;
+        entt::registry &world;
+
+        auto on_key_pressed(const kawe::Pressed<kawe::Key> &key)
+        {
+            switch (key.source.keycode) {
+            case kawe::Key::Code::KEY_E:
+                world.emplace_or_replace<kawe::Velocity3f>(entity, glm::vec3{0.5, 0.0, 0.0});
+                break;
+            case kawe::Key::Code::KEY_S:
+                world.emplace_or_replace<kawe::Velocity3f>(entity, glm::vec3{0.0, 0.0, 0.5});
+                break;
+            case kawe::Key::Code::KEY_F:
+                world.emplace_or_replace<kawe::Velocity3f>(entity, glm::vec3{0.0, 0.0, -0.5});
+                break;
+            case kawe::Key::Code::KEY_D:
+                world.emplace_or_replace<kawe::Velocity3f>(entity, glm::vec3{-0.5, 0.0, 0.0});
+                break;
+            case kawe::Key::Code::KEY_SPACE:
+                world.emplace_or_replace<kawe::Velocity3f>(entity, glm::vec3{0.0, 3.0, 0.0});
+                break;
+            default: break;
+            }
+        }
+    };
+
+    std::shared_ptr<Player> player;
+
+    engine.on_create = [&player](entt::registry &world) {
+        for (int y = 0; y != 5; y++) {
+            for (int x = 0; x != 5; x++) {
                 const auto cube = world.create();
                 kawe::Render::VBO<kawe::Render::VAO::Attribute::POSITION>::emplace(
                     world, cube, data::cube_positions, 3);
                 kawe::Render::VBO<kawe::Render::VAO::Attribute::COLOR>::emplace(world, cube, data::cube_colors, 4);
                 kawe::Render::EBO::emplace(world, cube, data::cube_indices);
                 world.emplace<kawe::Position3f>(cube, glm::vec3{x, 0, y});
+                world.emplace<kawe::Scale3f>(cube, glm::vec3{0.5, 0.5, 0.5});
             }
         }
+
+        const auto e = world.create();
+        kawe::Render::VBO<kawe::Render::VAO::Attribute::POSITION>::emplace(world, e, data::cube_positions, 3);
+        kawe::Render::VBO<kawe::Render::VAO::Attribute::COLOR>::emplace(world, e, data::cube_colors, 4);
+        kawe::Render::EBO::emplace(world, e, data::cube_indices);
+        world.emplace<kawe::Position3f>(e, glm::vec3{0, 1, 0});
+        world.emplace<kawe::Name>(e, "Player");
+
+        player = std::make_shared<Player>(e, world);
+        world.ctx<entt::dispatcher *>()->sink<kawe::Pressed<kawe::Key>>().connect<&Player::on_key_pressed>(
+            player.get());
     };
 
     engine.on_imgui = []() {

@@ -200,7 +200,7 @@ template<std::size_t D, typename T>
 struct Scale {
     static constexpr std::string_view name{"Scale"};
 
-    glm::vec<static_cast<int>(D), T> component;
+    glm::vec<static_cast<int>(D), T> component{1.0, 1.0, 1.0};
 };
 
 using Scale3f = Scale<3, float>;
@@ -211,14 +211,29 @@ struct Name {
     std::string component;
 };
 
+// todo : use units package
+template<std::size_t D, typename T>
 struct Velocity {
     static constexpr std::string_view name{"Velocity"};
 
-    glm::dvec3 component;
+    // distance per seconds
+    glm::vec<static_cast<int>(D), T> component{};
 };
+
+using Velocity3f = Velocity<3, float>;
+
+template<std::size_t D, typename T>
+struct Gravitable {
+    static constexpr std::string_view name{"Gravitable"};
+
+    glm::vec<static_cast<int>(D), T> component{};
+};
+
+using Gravitable3f = Gravitable<3, float>;
 
 using Component = std::variant<
     std::monostate,
+    Name,
     Render::VAO,
     Render::EBO,
     Render::VBO<Render::VAO::Attribute::POSITION>,
@@ -226,7 +241,7 @@ using Component = std::variant<
     Position3f,
     Rotation3f,
     Scale3f,
-    Name,
-    Velocity>;
+    Gravitable3f,
+    Velocity3f>;
 
 } // namespace kawe

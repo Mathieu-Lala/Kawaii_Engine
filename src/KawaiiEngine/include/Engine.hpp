@@ -184,27 +184,45 @@ void main()
                     },
                     [&](const kawe::TimeElapsed &e) {
                         const auto dt_nano = std::get<TimeElapsed>(event).elapsed;
+                        const auto dt_secs =
+                            static_cast<double>(
+                                std::chrono::duration_cast<std::chrono::microseconds>(dt_nano).count())
+                            / 1'000'000.0;
 
-                        // spdlog::trace("dt nano: {}", dt_nano.count());
-
-                        if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) {
-                            for (const auto &[button, pressed] : state_mouse_button) {
-                                if (pressed) {
-                                    camera.handleMouseInput(button, mouse_pos, mouse_pos_when_pressed, dt_nano);
+                        { // note : camera logics should be a system
+                            if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) {
+                                for (const auto &[button, pressed] : state_mouse_button) {
+                                    if (pressed) {
+                                        camera.handleMouseInput(
+                                            button, mouse_pos, mouse_pos_when_pressed, dt_nano);
+                                    }
                                 }
+                            }
+                            if (camera.hasChanged<Camera::Matrix::VIEW>()) {
+                                const auto view =
+                                    glm::lookAt(camera.getPosition(), camera.getTargetCenter(), camera.getUp());
+                                shader.setUniform("view", view);
+                                camera.setChangedFlag<Camera::Matrix::VIEW>(false);
+                            }
+                            if (camera.hasChanged<Camera::Matrix::PROJECTION>()) {
+                                const auto projection = camera.getProjection();
+                                shader.setUniform("projection", projection);
+                                camera.setChangedFlag<Camera::Matrix::PROJECTION>(false);
                             }
                         }
 
-                        if (camera.hasChanged<Camera::Matrix::VIEW>()) {
-                            const auto view =
-                                glm::lookAt(camera.getPosition(), camera.getTargetCenter(), camera.getUp());
-                            shader.setUniform("view", view);
-                            camera.setChangedFlag<Camera::Matrix::VIEW>(false);
+                        for (const auto &entity : world.view<Position3f, Velocity3f>()) {
+                            const auto &vel = world.get<Velocity3f>(entity);
+                            world.patch<Position3f>(entity, [&vel, &dt_secs](auto &pos) {
+                                pos.component += vel.component * static_cast<float>(dt_secs);
+                            });
                         }
-                        if (camera.hasChanged<Camera::Matrix::PROJECTION>()) {
-                            const auto projection = camera.getProjection();
-                            shader.setUniform("projection", projection);
-                            camera.setChangedFlag<Camera::Matrix::PROJECTION>(false);
+
+                        for (const auto &entity : world.view<Gravitable3f, Velocity3f>()) {
+                            const auto &gravity = world.get<Gravitable3f>(entity);
+                            world.patch<Velocity3f>(entity, [&gravity, &dt_secs](auto &vel) {
+                                vel.component += gravity.component * static_cast<float>(dt_secs);
+                            });
                         }
 
                         dispatcher.trigger<kawe::TimeElapsed>(e);
