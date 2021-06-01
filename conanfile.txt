@@ -24,10 +24,11 @@ glm/0.9.9.5@g-truc/stable
 nlohmann_json/3.9.0
 
 # Logger
-spdlog/1.6.0
+spdlog/1.8.5
 
 # Syntax Sugar
 magic_enum/0.6.6
+mp-units/0.7.0
 
 # CLI11/1.9.1@cliutils/stable
 # benchmark/1.5.2@_/_

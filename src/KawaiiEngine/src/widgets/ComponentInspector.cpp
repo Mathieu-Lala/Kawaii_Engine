@@ -49,6 +49,34 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt:
 }
 
 template<>
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Velocity3f &vel) const
+    -> void
+{
+    float temp[3] = {vel.component.x, vel.component.y, vel.component.z};
+    if (ImGui::InputFloat3("velocity", temp, "%.3f")) {
+        world.patch<Velocity3f>(e, [&temp](auto &v) {
+            v.component.x = temp[0];
+            v.component.y = temp[1];
+            v.component.z = temp[2];
+        });
+    }
+}
+
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Gravitable3f &gravity) const
+    -> void
+{
+    float temp[3] = {gravity.component.x, gravity.component.y, gravity.component.z};
+    if (ImGui::InputFloat3("velocity", temp, "%.3f")) {
+        world.patch<Gravitable3f>(e, [&temp](auto &grav) {
+            grav.component.x = temp[0];
+            grav.component.y = temp[1];
+            grav.component.z = temp[2];
+        });
+    }
+}
+
+template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Name &name) const
     -> void
 {
