@@ -1,5 +1,7 @@
 #pragma once
 
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 #include "tiny_obj_loader.h"
 
 namespace kawe {
@@ -8,8 +10,10 @@ namespace kawe {
         Model() = default;
         ~Model() = default;
 
-        std::vector<tinyobj::shape_t> shapes;
-        std::vector<tinyobj::material_t> materials;
-        tinyobj::attrib_t attributes;
+        std::vector<float> vertices;
+        std::vector<glm::vec3> normals;
+        std::vector<glm::vec2> texcoords;
+        std::vector<uint32_t> indices;
+        std::string filepath;
     };
 }

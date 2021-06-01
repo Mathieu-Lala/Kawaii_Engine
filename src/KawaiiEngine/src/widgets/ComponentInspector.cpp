@@ -149,6 +149,18 @@ auto kawe::ComponentInspector::drawComponentTweaker(
     });
 }
 
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(
+    [[ maybe_unused ]] entt::registry &world,
+    [[ maybe_unused ]] entt::entity e,
+    const Mesh &mesh) const
+        -> void
+{
+    ImGui::Text("path: %s", mesh.filepath.c_str());
+    ImGui::Text("model: %s", mesh.model_name.c_str());
+    ImGui::Text("loaded successfully: %s", mesh.loaded_successfully ? "Yes" : "No");
+}
+
 auto kawe::ComponentInspector::draw(entt::registry &world) -> void
 {
     ImGui::Begin("KAWE: Component Inspector");
