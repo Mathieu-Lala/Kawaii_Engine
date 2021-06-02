@@ -78,6 +78,8 @@ public:
         SET_DESTRUCTOR(Render::VBO<Render::VAO::Attribute::COLOR>);
         SET_DESTRUCTOR(Render::EBO);
 #undef SET_DESTRUCTOR
+
+        state = std::make_unique<State>(*window);
     }
 
     ~Engine()
@@ -96,59 +98,13 @@ public:
 
     auto start()
     {
-        constexpr auto VERT_SH = R"(#version 450
-layout (location = 0) in vec3 inPos;
-layout (location = 1) in vec4 inColors;
-
-uniform mat4 model;
-uniform mat4 view;
-uniform mat4 projection;
-
-out vec4 fragColors;
-
-void main()
-{
-    gl_Position = projection * view * model * vec4(inPos, 1.0f);
-    fragColors = inColors;
-}
-)";
-
-        constexpr auto FRAG_SH = R"(#version 450
-in vec4 fragColors;
-out vec4 FragColor;
-
-void main()
-{
-    FragColor = fragColors;
-}
-)";
-
         CALL_OPEN_GL(::glEnable(GL_DEPTH_TEST));
         CALL_OPEN_GL(::glEnable(GL_BLEND));
         CALL_OPEN_GL(::glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
 
-        Shader shader(VERT_SH, FRAG_SH);
-        shader.use();
-
-        Camera camera{*window, glm::vec3{5, 5, 5}};
-
-
-        bool is_running = true;
-
-        glm::dvec2 mouse_pos{};
-        glm::dvec2 mouse_pos_when_pressed{};
-
-        std::unordered_map<MouseButton::Button, bool> state_mouse_button;
-        for (const auto &i : magic_enum::enum_values<MouseButton::Button>()) {
-            state_mouse_button[i] = false;
-        }
-
-        std::unordered_map<Key::Code, bool> keyboard_state;
-        for (const auto &i : magic_enum::enum_values<Key::Code>()) { keyboard_state[i] = false; }
-
         on_create(world);
 
-        while (is_running && !window->should_close()) {
+        while (state->is_running && !window->should_close()) {
             const auto event = events.getNextEvent();
 
             std::visit(
@@ -156,105 +112,37 @@ void main()
                     [&](const kawe::OpenWindow &) {
                         events.setCurrentTimepoint(std::chrono::steady_clock::now());
                     },
-                    [&](const kawe::CloseWindow &) { is_running = false; },
+                    [&](const kawe::CloseWindow &) { state->is_running = false; },
                     [&](const kawe::Moved<kawe::Mouse> &mouse) {
-                        mouse_pos = {mouse.source.x, mouse.source.y};
+                        state->mouse_pos = {mouse.source.x, mouse.source.y};
                         dispatcher.trigger<kawe::Moved<kawe::Mouse>>(mouse);
                     },
                     [&](const kawe::Pressed<kawe::MouseButton> &e) {
                         window->useEvent(e);
-                        state_mouse_button[e.source.button] = true;
-                        mouse_pos_when_pressed = {e.source.mouse.x, e.source.mouse.y};
+                        state->state_mouse_button[e.source.button] = true;
+                        state->mouse_pos_when_pressed = {e.source.mouse.x, e.source.mouse.y};
                         dispatcher.trigger<kawe::Pressed<kawe::MouseButton>>(e);
                     },
                     [&](const kawe::Released<kawe::MouseButton> &e) {
                         window->useEvent(e);
-                        state_mouse_button[e.source.button] = false;
+                        state->state_mouse_button[e.source.button] = false;
                         dispatcher.trigger<kawe::Released<kawe::MouseButton>>(e);
                     },
                     [&](const kawe::Pressed<kawe::Key> &e) {
                         window->useEvent(e);
-                        keyboard_state[e.source.keycode] = true;
+                        state->keyboard_state[e.source.keycode] = true;
                         dispatcher.trigger<kawe::Pressed<kawe::Key>>(e);
                     },
                     [&](const kawe::Released<kawe::Key> &e) {
                         window->useEvent(e);
-                        keyboard_state[e.source.keycode] = false;
+                        state->keyboard_state[e.source.keycode] = false;
                         dispatcher.trigger<kawe::Released<kawe::Key>>(e);
                     },
                     [&](const kawe::Character &e) {
                         window->useEvent(e);
                         dispatcher.trigger<kawe::Character>(e);
                     },
-                    [&](const kawe::TimeElapsed &e) {
-                        const auto dt_nano = std::get<TimeElapsed>(event).elapsed;
-                        const auto dt_secs =
-                            static_cast<double>(
-                                std::chrono::duration_cast<std::chrono::microseconds>(dt_nano).count())
-                            / 1'000'000.0;
-
-                        { // note : camera logics should be a system
-                            if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) {
-                                for (const auto &[button, pressed] : state_mouse_button) {
-                                    if (pressed) {
-                                        camera.handleMouseInput(
-                                            button, mouse_pos, mouse_pos_when_pressed, dt_nano);
-                                    }
-                                }
-                            }
-                            if (camera.hasChanged<Camera::Matrix::VIEW>()) {
-                                const auto view =
-                                    glm::lookAt(camera.getPosition(), camera.getTargetCenter(), camera.getUp());
-                                shader.setUniform("view", view);
-                                camera.setChangedFlag<Camera::Matrix::VIEW>(false);
-                            }
-                            if (camera.hasChanged<Camera::Matrix::PROJECTION>()) {
-                                const auto projection = camera.getProjection();
-                                shader.setUniform("projection", projection);
-                                camera.setChangedFlag<Camera::Matrix::PROJECTION>(false);
-                            }
-                        }
-
-                        for (const auto &entity : world.view<Position3f, Velocity3f>()) {
-                            const auto &vel = world.get<Velocity3f>(entity);
-                            world.patch<Position3f>(entity, [&vel, &dt_secs](auto &pos) {
-                                pos.component += vel.component * static_cast<float>(dt_secs);
-                            });
-                        }
-
-                        for (const auto &entity : world.view<Gravitable3f, Velocity3f>()) {
-                            const auto &gravity = world.get<Gravitable3f>(entity);
-                            world.patch<Velocity3f>(entity, [&gravity, &dt_secs](auto &vel) {
-                                vel.component += gravity.component * static_cast<float>(dt_secs);
-                            });
-                        }
-
-                        dispatcher.trigger<kawe::TimeElapsed>(e);
-
-                        ImGui_ImplOpenGL3_NewFrame();
-                        ImGui_ImplGlfw_NewFrame();
-                        ImGui::NewFrame();
-
-                        ImGui::ShowDemoWindow();
-
-                        on_imgui();
-
-                        entity_hierarchy.draw(world);
-                        component_inspector.draw(world);
-
-                        ImGui::Render();
-
-                        constexpr auto CLEAR_COLOR = glm::vec4{0.0f, 1.0f, 0.2f, 1.0f};
-
-                        glClearColor(CLEAR_COLOR.r, CLEAR_COLOR.g, CLEAR_COLOR.b, CLEAR_COLOR.a);
-                        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-                        system_rendering(shader);
-
-                        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-                        glfwSwapBuffers(window->get());
-                    },
+                    [&](const kawe::TimeElapsed &e) { on_time_elapsed(e); },
                     [](const auto &) {}},
                 event);
         }
@@ -272,6 +160,129 @@ private:
 
     ComponentInspector component_inspector;
     EntityHierarchy entity_hierarchy;
+
+    struct State {
+        static constexpr std::string_view VERT_SH = R"(#version 450
+layout (location = 0) in vec3 inPos;
+layout (location = 1) in vec4 inColors;
+
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
+
+out vec4 fragColors;
+
+void main()
+{
+    gl_Position = projection * view * model * vec4(inPos, 1.0f);
+    fragColors = inColors;
+}
+)";
+
+        static constexpr std::string_view FRAG_SH = R"(#version 450
+in vec4 fragColors;
+out vec4 FragColor;
+
+void main()
+{
+    FragColor = fragColors;
+}
+)";
+
+        State(const Window &window) : shader{VERT_SH, FRAG_SH}, camera{window, glm::vec3{5, 5, 5}}
+        {
+            shader.use();
+
+            for (const auto &i : magic_enum::enum_values<MouseButton::Button>()) {
+                state_mouse_button[i] = false;
+            }
+            for (const auto &i : magic_enum::enum_values<Key::Code>()) { keyboard_state[i] = false; }
+        }
+
+        Shader shader;
+
+        Camera camera;
+
+        bool is_running = true;
+
+        glm::dvec2 mouse_pos{};
+        glm::dvec2 mouse_pos_when_pressed{};
+
+        std::unordered_map<MouseButton::Button, bool> state_mouse_button;
+        std::unordered_map<Key::Code, bool> keyboard_state;
+    };
+
+    std::unique_ptr<State> state;
+
+    auto on_time_elapsed(const kawe::TimeElapsed &e) -> void
+    {
+        const auto dt_nano = e.elapsed;
+        const auto dt_secs =
+            static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(dt_nano).count())
+            / 1'000'000.0;
+
+        { // note : camera logics should be a system
+            if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) {
+                for (const auto &[button, pressed] : state->state_mouse_button) {
+                    if (pressed) {
+                        state->camera.handleMouseInput(
+                            button, state->mouse_pos, state->mouse_pos_when_pressed, dt_nano);
+                    }
+                }
+            }
+            if (state->camera.hasChanged<Camera::Matrix::VIEW>()) {
+                const auto view = glm::lookAt(
+                    state->camera.getPosition(), state->camera.getTargetCenter(), state->camera.getUp());
+                state->shader.setUniform("view", view);
+                state->camera.setChangedFlag<Camera::Matrix::VIEW>(false);
+            }
+            if (state->camera.hasChanged<Camera::Matrix::PROJECTION>()) {
+                const auto projection = state->camera.getProjection();
+                state->shader.setUniform("projection", projection);
+                state->camera.setChangedFlag<Camera::Matrix::PROJECTION>(false);
+            }
+        }
+
+        for (const auto &entity : world.view<Position3f, Velocity3f>()) {
+            const auto &vel = world.get<Velocity3f>(entity);
+            world.patch<Position3f>(entity, [&vel, &dt_secs](auto &pos) {
+                pos.component += vel.component * static_cast<float>(dt_secs);
+            });
+        }
+
+        for (const auto &entity : world.view<Gravitable3f, Velocity3f>()) {
+            const auto &gravity = world.get<Gravitable3f>(entity);
+            world.patch<Velocity3f>(entity, [&gravity, &dt_secs](auto &vel) {
+                vel.component += gravity.component * static_cast<float>(dt_secs);
+            });
+        }
+
+        dispatcher.trigger<kawe::TimeElapsed>(e);
+
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        ImGui::ShowDemoWindow();
+
+        on_imgui();
+
+        entity_hierarchy.draw(world);
+        component_inspector.draw(world);
+
+        ImGui::Render();
+
+        constexpr auto CLEAR_COLOR = glm::vec4{0.0f, 1.0f, 0.2f, 1.0f};
+
+        glClearColor(CLEAR_COLOR.r, CLEAR_COLOR.g, CLEAR_COLOR.b, CLEAR_COLOR.a);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        system_rendering(state->shader);
+
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        glfwSwapBuffers(window->get());
+    }
 
     auto system_rendering(Shader &shader) -> void
     {
