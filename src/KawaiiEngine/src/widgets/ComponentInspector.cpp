@@ -12,7 +12,10 @@ template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Position3f &position) const
     -> void
 {
-    float temp[3] = {position.component.x, position.component.y, position.component.z};
+    float temp[3] = {
+        static_cast<float>(position.component.x),
+        static_cast<float>(position.component.y),
+        static_cast<float>(position.component.z)};
     if (ImGui::InputFloat3("position", temp, "%.3f")) {
         world.patch<Position3f>(e, [&temp](auto &pos) {
             pos.component.x = temp[0];
@@ -26,7 +29,10 @@ template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Rotation3f &rotation) const
     -> void
 {
-    float temp[3] = {rotation.component.x, rotation.component.y, rotation.component.z};
+    float temp[3] = {
+        static_cast<float>(rotation.component.x),
+        static_cast<float>(rotation.component.y),
+        static_cast<float>(rotation.component.z)};
     if (ImGui::InputFloat3("rotation", temp, "%.3f")) {
         world.patch<Rotation3f>(e, [&temp](auto &rot) {
             rot.component.x = temp[0];
@@ -40,7 +46,10 @@ template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Scale3f &scale) const
     -> void
 {
-    float temp[3] = {scale.component.x, scale.component.y, scale.component.z};
+    float temp[3] = {
+        static_cast<float>(scale.component.x),
+        static_cast<float>(scale.component.y),
+        static_cast<float>(scale.component.z)};
     if (ImGui::InputFloat3("scale", temp, "%.3f")) {
         world.patch<Scale3f>(e, [&temp](auto &scl) {
             scl.component.x = temp[0];
@@ -54,7 +63,10 @@ template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Velocity3f &vel) const
     -> void
 {
-    float temp[3] = {vel.component.x, vel.component.y, vel.component.z};
+    float temp[3] = {
+        static_cast<float>(vel.component.x),
+        static_cast<float>(vel.component.y),
+        static_cast<float>(vel.component.z)};
     if (ImGui::InputFloat3("velocity", temp, "%.3f")) {
         world.patch<Velocity3f>(e, [&temp](auto &v) {
             v.component.x = temp[0];
@@ -68,7 +80,10 @@ template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Gravitable3f &gravity) const
     -> void
 {
-    float temp[3] = {gravity.component.x, gravity.component.y, gravity.component.z};
+    float temp[3] = {
+        static_cast<float>(gravity.component.x),
+        static_cast<float>(gravity.component.y),
+        static_cast<float>(gravity.component.z)};
     if (ImGui::InputFloat3("velocity", temp, "%.3f")) {
         world.patch<Gravitable3f>(e, [&temp](auto &grav) {
             grav.component.x = temp[0];
@@ -179,6 +194,21 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt:
 
         ImGuiFileDialog::Instance()->Close();
     }
+}
+
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &, entt::entity, const AABB &aabb) const -> void
+{
+    ImGui::Text(fmt::format("min: {{.x: {}, .y: {}, .z: {}}}", aabb.min.x, aabb.min.y, aabb.min.z).data());
+    ImGui::Text(fmt::format("max: {{.x: {}, .y: {}, .z: {}}}", aabb.max.x, aabb.max.y, aabb.max.z).data());
+}
+
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &, entt::entity, const Collider &collider) const
+    -> void
+{
+    constexpr auto enum_name = magic_enum::enum_type_name<Collider::CollisionStep>();
+    ImGui::Text(fmt::format("{} = {}", enum_name.data(), magic_enum::enum_name(collider.step)).data());
 }
 
 auto kawe::ComponentInspector::draw(entt::registry &world) -> void

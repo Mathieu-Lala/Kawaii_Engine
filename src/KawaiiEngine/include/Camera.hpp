@@ -2,6 +2,8 @@
 
 #include <glm/glm.hpp>
 
+#include "Event.hpp"
+
 namespace kawe {
 
 struct Camera {
@@ -136,9 +138,9 @@ struct Camera {
         MouseButton::Button button,
         const glm::dvec2 &mouse_pos,
         const glm::dvec2 &mouse_pos_when_pressed,
-        const std::chrono::nanoseconds dt)
+        const double dt_secs)
     {
-        const auto ms = static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(dt).count());
+        const auto ms = dt_secs * 1'000.0;
         const auto size = m_window.getSize<double>();
 
         switch (button) {
