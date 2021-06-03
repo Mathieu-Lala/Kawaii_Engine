@@ -305,17 +305,6 @@ struct AABB {
             const auto guizmo = world.create();
 
             // clang-format off
-            constexpr auto outlined_cube_positions = std::to_array({
-                -0.5f, -0.5f, +0.5f,
-                +0.5f, -0.5f, +0.5f,
-                +0.5f, +0.5f, +0.5f,
-                -0.5f, +0.5f, +0.5f,
-                -0.5f, -0.5f, -0.5f,
-                +0.5f, -0.5f, -0.5f,
-                +0.5f, +0.5f, -0.5f,
-                -0.5f, +0.5f, -0.5f
-            });
-
             constexpr auto outlined_cube_colors = std::to_array({
                 0.0f, 0.0f, 0.0f, 1.0f,
                 0.0f, 0.0f, 0.0f, 1.0f,
@@ -326,7 +315,6 @@ struct AABB {
                 0.0f, 0.0f, 0.0f, 1.0f,
                 0.0f, 0.0f, 0.0f, 1.0f
             });
-
             constexpr auto outlined_cube_indices = std::to_array<std::uint32_t>({
                 0, 1, 1, 2, 2, 3, 3, 0, // Front
                 4, 5, 5, 6, 6, 7, 7, 4, // Back
@@ -334,7 +322,6 @@ struct AABB {
             });
             // clang-format on
 
-            Render::VBO<Render::VAO::Attribute::POSITION>::emplace(world, guizmo, outlined_cube_positions, 3);
             Render::VBO<Render::VAO::Attribute::COLOR>::emplace(world, guizmo, outlined_cube_colors, 4);
 
             Render::EBO::emplace(world, guizmo, outlined_cube_indices);
@@ -352,9 +339,17 @@ struct AABB {
             aabb->max = max;
         }
 
-        world.emplace_or_replace<Position3f>(aabb->guizmo, *pos);
-        world.emplace_or_replace<Rotation3f>(aabb->guizmo, *rot);
-        world.emplace_or_replace<Scale3f>(aabb->guizmo, *scale);
+        const auto outlined_cube_positions = std::to_array<float>(
+            {static_cast<float>(min.x), static_cast<float>(min.y), static_cast<float>(max.z),
+             static_cast<float>(max.x), static_cast<float>(min.y), static_cast<float>(max.z),
+             static_cast<float>(max.x), static_cast<float>(max.y), static_cast<float>(max.z),
+             static_cast<float>(min.x), static_cast<float>(max.y), static_cast<float>(max.z),
+             static_cast<float>(min.x), static_cast<float>(min.y), static_cast<float>(min.z),
+             static_cast<float>(max.x), static_cast<float>(min.y), static_cast<float>(min.z),
+             static_cast<float>(max.x), static_cast<float>(max.y), static_cast<float>(min.z),
+             static_cast<float>(min.x), static_cast<float>(max.y), static_cast<float>(min.z)});
+
+        Render::VBO<Render::VAO::Attribute::POSITION>::emplace(world, aabb->guizmo, outlined_cube_positions, 3);
 
         return *aabb;
     }
