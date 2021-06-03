@@ -16,6 +16,11 @@
 #include "State.hpp"
 
 namespace kawe {
+struct Name {
+    static constexpr std::string_view name{"Name"};
+
+    std::string component;
+};
 
 template<std::size_t D, typename T>
 struct Position {
@@ -47,89 +52,6 @@ struct Scale {
 
 using Scale3f = Scale<3, double>;
 
-// the biggest cube containing a mesh objects
-struct AABB {
-    static constexpr std::string_view name{"AABB"};
-
-    glm::dvec3 min;
-    glm::dvec3 max;
-
-    static auto emplace(entt::registry &world, entt::entity e, const std::vector<float> &vertices) -> AABB &
-    {
-        glm::dvec3 min = {
-            std::numeric_limits<double>::max(),
-            std::numeric_limits<double>::max(),
-            std::numeric_limits<double>::max()};
-        glm::dvec3 max = {
-            std::numeric_limits<double>::min(),
-            std::numeric_limits<double>::min(),
-            std::numeric_limits<double>::min()};
-
-        const auto state = world.ctx<State *>();
-
-        constexpr auto default_pos = Position3f{Position3f::default_value};
-        constexpr auto default_scale = Scale3f{Scale3f::default_value};
-        constexpr auto default_rot = Rotation3f{Rotation3f::default_value};
-
-        auto pos = world.try_get<const Position3f>(e);
-        if (pos == nullptr) { pos = &default_pos; }
-
-        auto scale = world.try_get<const Scale3f>(e);
-        if (scale == nullptr) { scale = &default_scale; }
-
-        auto rot = world.try_get<const Rotation3f>(e);
-        if (rot == nullptr) { rot = &default_rot; }
-
-        auto model = glm::dmat4(1.0);
-        model = glm::translate(model, pos->component);
-        model = glm::rotate(model, glm::radians(rot->component.x), glm::dvec3(1.0, 0.0, 0.0));
-        model = glm::rotate(model, glm::radians(rot->component.y), glm::dvec3(0.0, 1.0, 0.0));
-        model = glm::rotate(model, glm::radians(rot->component.z), glm::dvec3(0.0, 0.0, 1.0));
-        model = glm::scale(model, scale->component);
-
-        const auto mvp = state->projection * state->view * model;
-        spdlog::info(
-            "{} {} {} {}\n"
-            "{} {} {} {}\n"
-            "{} {} {} {}\n"
-            "{} {} {} {}\n",
-            mvp[0][0],
-            mvp[0][1],
-            mvp[0][2],
-            mvp[0][3],
-            mvp[1][0],
-            mvp[1][1],
-            mvp[1][2],
-            mvp[1][3],
-            mvp[2][0],
-            mvp[2][1],
-            mvp[2][2],
-            mvp[2][3],
-            mvp[3][0],
-            mvp[3][1],
-            mvp[3][2],
-            mvp[3][3]);
-
-
-        constexpr auto size_stride = 3;
-        for (auto i = 0ul; i != vertices.size(); i += size_stride) {
-            spdlog::info("vertices {} {} {}", vertices[i], vertices[i + 1], vertices[i + 2]);
-
-            const auto projected = mvp * glm::dvec4{vertices[i], vertices[i + 1], vertices[i + 2], 1};
-            spdlog::info("projected : {} {} {}", projected.x, projected.y, projected.z);
-
-            min.x = std::min(min.x, projected.x);
-            min.y = std::min(min.y, projected.y);
-            min.z = std::min(min.z, projected.z);
-
-            max.x = std::max(max.x, projected.x);
-            max.y = std::max(max.y, projected.y);
-            max.z = std::max(max.z, projected.z);
-        }
-
-        return world.emplace_or_replace<AABB>(e, min, max);
-    }
-};
 
 // using this because the VAO/VBO/EBO are referencing each others
 struct Render {
@@ -233,7 +155,7 @@ struct Render {
                 });
             }
 
-            if (A == VAO::Attribute::POSITION) { AABB::emplace(world, entity, obj.vertices); }
+            // if (A == VAO::Attribute::POSITION) { AABB::emplace(world, entity, obj.vertices); }
 
             if (const auto vbo = world.try_get<VBO<A>>(entity); vbo != nullptr) {
                 world.remove<VBO<A>>(entity);
@@ -312,10 +234,116 @@ template<Render::VAO::Attribute A>
 std::string Render::VBO<A>::name = std::string("VBO::") + magic_enum::enum_name(A).data();
 
 
-struct Name {
-    static constexpr std::string_view name{"Name"};
+// the biggest cube containing a mesh objects
+struct AABB {
+    static constexpr std::string_view name{"AABB"};
 
-    std::string component;
+    glm::dvec3 min;
+    glm::dvec3 max;
+
+    entt::entity guizmo = std::numeric_limits<entt::entity>::max();
+
+    static auto emplace(entt::registry &world, entt::entity e, const std::vector<float> &vertices) -> AABB &
+    {
+        glm::dvec3 min = {
+            std::numeric_limits<double>::max(),
+            std::numeric_limits<double>::max(),
+            std::numeric_limits<double>::max()};
+        glm::dvec3 max = {
+            std::numeric_limits<double>::lowest(),
+            std::numeric_limits<double>::lowest(),
+            std::numeric_limits<double>::lowest()};
+
+        constexpr auto default_pos = Position3f{Position3f::default_value};
+        constexpr auto default_scale = Scale3f{Scale3f::default_value};
+        constexpr auto default_rot = Rotation3f{Rotation3f::default_value};
+
+        // todo : avoid that
+
+        auto pos = world.try_get<const Position3f>(e);
+        if (pos == nullptr) { pos = &default_pos; }
+
+        auto scale = world.try_get<const Scale3f>(e);
+        if (scale == nullptr) { scale = &default_scale; }
+
+        auto rot = world.try_get<const Rotation3f>(e);
+        if (rot == nullptr) { rot = &default_rot; }
+
+        auto model = glm::dmat4(1.0);
+        model = glm::translate(model, pos->component);
+        model = glm::rotate(model, glm::radians(rot->component.x), glm::dvec3(1.0, 0.0, 0.0));
+        model = glm::rotate(model, glm::radians(rot->component.y), glm::dvec3(0.0, 1.0, 0.0));
+        model = glm::rotate(model, glm::radians(rot->component.z), glm::dvec3(0.0, 0.0, 1.0));
+        model = glm::scale(model, scale->component);
+
+        constexpr auto size_stride = 3;
+        for (auto i = 0ul; i != vertices.size(); i += size_stride) {
+            const auto projected = model * glm::dvec4{vertices[i], vertices[i + 1], vertices[i + 2], 1};
+
+            min.x = std::min(min.x, projected.x);
+            min.y = std::min(min.y, projected.y);
+            min.z = std::min(min.z, projected.z);
+
+            max.x = std::max(max.x, projected.x);
+            max.y = std::max(max.y, projected.y);
+            max.z = std::max(max.z, projected.z);
+        }
+
+        AABB *aabb = world.try_get<AABB>(e);
+        if (aabb == nullptr) {
+            const auto guizmo = world.create();
+
+            // clang-format off
+            constexpr auto outlined_cube_positions = std::to_array({
+                -0.5f, -0.5f, +0.5f,
+                +0.5f, -0.5f, +0.5f,
+                +0.5f, +0.5f, +0.5f,
+                -0.5f, +0.5f, +0.5f,
+                -0.5f, -0.5f, -0.5f,
+                +0.5f, -0.5f, -0.5f,
+                +0.5f, +0.5f, -0.5f,
+                -0.5f, +0.5f, -0.5f
+            });
+
+            constexpr auto outlined_cube_colors = std::to_array({
+                0.0f, 0.0f, 0.0f, 1.0f,
+                0.0f, 0.0f, 0.0f, 1.0f,
+                0.0f, 0.0f, 0.0f, 1.0f,
+                0.0f, 0.0f, 0.0f, 1.0f,
+                0.0f, 0.0f, 0.0f, 1.0f,
+                0.0f, 0.0f, 0.0f, 1.0f,
+                0.0f, 0.0f, 0.0f, 1.0f,
+                0.0f, 0.0f, 0.0f, 1.0f
+            });
+
+            constexpr auto outlined_cube_indices = std::to_array<std::uint32_t>({
+                0, 1, 1, 2, 2, 3, 3, 0, // Front
+                4, 5, 5, 6, 6, 7, 7, 4, // Back
+                0, 4, 1, 5, 2, 6, 3, 7
+            });
+            // clang-format on
+
+            Render::VBO<Render::VAO::Attribute::POSITION>::emplace(world, guizmo, outlined_cube_positions, 3);
+            Render::VBO<Render::VAO::Attribute::COLOR>::emplace(world, guizmo, outlined_cube_colors, 4);
+
+            Render::EBO::emplace(world, guizmo, outlined_cube_indices);
+            world.get<Render::VAO>(guizmo).mode = Render::VAO::DisplayMode::LINES;
+            const auto parent_name = world.try_get<Name>(e);
+            const auto name = parent_name != nullptr ? std::string{parent_name->name} : fmt::format("{}", e);
+            world.emplace<Name>(guizmo, fmt::format("<aabb::guizmo#{}>", name));
+
+            aabb = &world.emplace<AABB>(e, min, max, guizmo);
+        } else {
+            aabb->min = min;
+            aabb->max = max;
+        }
+
+        world.emplace_or_replace<Position3f>(aabb->guizmo, *pos);
+        world.emplace_or_replace<Rotation3f>(aabb->guizmo, *rot);
+        world.emplace_or_replace<Scale3f>(aabb->guizmo, *scale);
+
+        return *aabb;
+    }
 };
 
 // todo : use units package

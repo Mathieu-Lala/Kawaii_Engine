@@ -73,20 +73,22 @@ public:
 
         glfwSwapInterval(0);
 
-        world.set<entt::dispatcher *>(&dispatcher);
-        world.set<ResourceLoader *>(&loader);
-#define SET_DESTRUCTOR(Type) world.on_destroy<Type>().connect<Type::on_destroy>()
-        SET_DESTRUCTOR(Render::VAO);
-        SET_DESTRUCTOR(Render::VBO<Render::VAO::Attribute::POSITION>);
-        SET_DESTRUCTOR(Render::VBO<Render::VAO::Attribute::COLOR>);
-        SET_DESTRUCTOR(Render::EBO);
-#undef SET_DESTRUCTOR
+        world.on_destroy<Render::VAO>().connect<Render::VAO::on_destroy>();
+        world.on_destroy<Render::VBO<Render::VAO::Attribute::POSITION>>()
+            .connect<Render::VBO<Render::VAO::Attribute::POSITION>::on_destroy>();
+        world.on_destroy<Render::VBO<Render::VAO::Attribute::COLOR>>()
+            .connect<Render::VBO<Render::VAO::Attribute::COLOR>::on_destroy>();
+        world.on_destroy<Render::EBO>().connect<Render::EBO::on_destroy>();
 
         const auto update_aabb = [](entt::registry &reg, entt::entity e) -> void {
-            if (const auto vbo = reg.try_get<Render::VBO<Render::VAO::Attribute::POSITION>>(e); vbo != nullptr) {
-                AABB::emplace(reg, e, vbo->vertices);
+            if (const auto collider = reg.try_get<Collider>(e); collider != nullptr) {
+                if (const auto vbo = reg.try_get<Render::VBO<Render::VAO::Attribute::POSITION>>(e);
+                    vbo != nullptr) {
+                    AABB::emplace(reg, e, vbo->vertices);
+                }
             }
         };
+
         world.on_construct<Position3f>().connect<update_aabb>();
         world.on_construct<Position3f>().connect<update_aabb>();
         world.on_construct<Position3f>().connect<update_aabb>();
@@ -95,6 +97,13 @@ public:
         world.on_update<Rotation3f>().connect<update_aabb>();
         world.on_update<Scale3f>().connect<update_aabb>();
 
+        world.on_construct<Collider>().connect<update_aabb>();
+
+        world.on_construct<Render::VBO<Render::VAO::Attribute::POSITION>>().connect<update_aabb>();
+        world.on_update<Render::VBO<Render::VAO::Attribute::POSITION>>().connect<update_aabb>();
+
+        world.set<entt::dispatcher *>(&dispatcher);
+        world.set<ResourceLoader *>(&loader);
         state = std::make_unique<State>(*window);
         state->view =
             glm::lookAt(state->camera.getPosition(), state->camera.getTargetCenter(), state->camera.getUp());
@@ -226,21 +235,11 @@ private:
             });
         }
 
-        // const auto get_projection_shape = []() {
-        //     auto model = glm::mat4(1.0f);
-        //     model = glm::translate(model, pos.component);
-        //     model = glm::rotate(model, glm::radians(rot.component.x), glm::vec3(1.0f, 0.0f, 0.0f));
-        //     model = glm::rotate(model, glm::radians(rot.component.y), glm::vec3(0.0f, 1.0f, 0.0f));
-        //     model = glm::rotate(model, glm::radians(rot.component.z), glm::vec3(0.0f, 0.0f, 1.0f));
-        //     model = glm::scale(model, scale.component);
-        //     return model;
-        // };
-
         // todo : call this not every frame but only when the AABB changed
         // AABB alogrithm = really simple and fast collision detection
         for (const auto &entity1 : world.view<Collider, AABB>()) {
             const auto aabb1 = world.get<AABB>(entity1);
-            // Rotation3f
+            const auto collider1 = world.get<Collider>(entity1);
 
             bool has_aabb_collision = false;
 
@@ -256,6 +255,33 @@ private:
             if (has_aabb_collision) {
                 world.patch<Collider>(
                     entity1, [](auto &collider) { collider.step = Collider::CollisionStep::AABB; });
+
+                // todo : this should be wrapped in a helper function ?
+                const auto &vbo_color = world.get<Render::VBO<Render::VAO::Attribute::COLOR>>(aabb1.guizmo);
+                std::vector<float> color_red{};
+                for (auto i = 0ul; i != vbo_color.vertices.size(); i += vbo_color.stride_size) {
+                    color_red.emplace_back(1.0f); // r
+                    color_red.emplace_back(0.0f); // g
+                    color_red.emplace_back(0.0f); // b
+                    color_red.emplace_back(1.0f); // a
+                }
+                Render::VBO<Render::VAO::Attribute::COLOR>::emplace(world, aabb1.guizmo, color_red, 4);
+            } else {
+                if (collider1.step != Collider::CollisionStep::NONE) {
+                    world.patch<Collider>(
+                        entity1, [](auto &collider) { collider.step = Collider::CollisionStep::NONE; });
+
+                    // todo : this should be wrapped in a helper function ?
+                    const auto &vbo_color = world.get<Render::VBO<Render::VAO::Attribute::COLOR>>(aabb1.guizmo);
+                    std::vector<float> color_black{};
+                    for (auto i = 0ul; i != vbo_color.vertices.size(); i += vbo_color.stride_size) {
+                        color_black.emplace_back(0.0f); // r
+                        color_black.emplace_back(0.0f); // g
+                        color_black.emplace_back(0.0f); // b
+                        color_black.emplace_back(1.0f); // a
+                    }
+                    Render::VBO<Render::VAO::Attribute::COLOR>::emplace(world, aabb1.guizmo, color_black, 4);
+                }
             }
         }
 
@@ -397,6 +423,6 @@ private:
                 render.operator()<true>(vao, pos, rot, scale);
             });
     }
-};
+}; // namespace kawe
 
 } // namespace kawe
