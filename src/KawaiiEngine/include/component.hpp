@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <string>
 #include <variant>
+#include <limits>
 
 #include <glm/glm.hpp>
 #include <magic_enum.hpp>
@@ -12,8 +13,45 @@
 #include <GL/glew.h>
 
 #include "resources/ResourceLoader.hpp"
+#include "State.hpp"
 
 namespace kawe {
+struct Name {
+    static constexpr std::string_view name{"Name"};
+
+    std::string component;
+};
+
+template<std::size_t D, typename T>
+struct Position {
+    static constexpr std::string_view name{"Position"};
+    static constexpr glm::vec<static_cast<int>(D), T> default_value{0.0f, 0.0f, 0.0f};
+
+    glm::vec<static_cast<int>(D), T> component{default_value};
+};
+
+using Position3f = Position<3, double>;
+
+template<std::size_t D, typename T>
+struct Rotation {
+    static constexpr std::string_view name{"Rotation"};
+    static constexpr glm::vec<static_cast<int>(D), T> default_value{0.0f, 0.0f, 0.0f};
+
+    glm::vec<static_cast<int>(D), T> component{default_value};
+};
+
+using Rotation3f = Rotation<3, double>;
+
+template<std::size_t D, typename T>
+struct Scale {
+    static constexpr std::string_view name{"Scale"};
+    static constexpr glm::vec<static_cast<int>(D), T> default_value{1.0f, 1.0f, 1.0f};
+
+    glm::vec<static_cast<int>(D), T> component{default_value};
+};
+
+using Scale3f = Scale<3, double>;
+
 
 // using this because the VAO/VBO/EBO are referencing each others
 struct Render {
@@ -117,7 +155,11 @@ struct Render {
                 });
             }
 
-            if (const auto vbo = world.try_get<VBO<A>>(entity); vbo != nullptr) world.remove<VBO<A>>(entity);
+            // if (A == VAO::Attribute::POSITION) { AABB::emplace(world, entity, obj.vertices); }
+
+            if (const auto vbo = world.try_get<VBO<A>>(entity); vbo != nullptr) {
+                world.remove<VBO<A>>(entity);
+            }
             return world.emplace<VBO<A>>(entity, obj);
         }
 
@@ -191,37 +233,117 @@ struct Render {
 template<Render::VAO::Attribute A>
 std::string Render::VBO<A>::name = std::string("VBO::") + magic_enum::enum_name(A).data();
 
-template<std::size_t D, typename T>
-struct Position {
-    static constexpr std::string_view name{"Position"};
 
-    glm::vec<static_cast<int>(D), T> component;
-};
+// the biggest cube containing a mesh objects
+struct AABB {
+    static constexpr std::string_view name{"AABB"};
 
-using Position3f = Position<3, float>;
+    glm::dvec3 min;
+    glm::dvec3 max;
 
-template<std::size_t D, typename T>
-struct Rotation {
-    static constexpr std::string_view name{"Rotation"};
+    entt::entity guizmo = std::numeric_limits<entt::entity>::max();
 
-    glm::vec<static_cast<int>(D), T> component;
-};
+    static auto emplace(entt::registry &world, entt::entity e, const std::vector<float> &vertices) -> AABB &
+    {
+        glm::dvec3 min = {
+            std::numeric_limits<double>::max(),
+            std::numeric_limits<double>::max(),
+            std::numeric_limits<double>::max()};
+        glm::dvec3 max = {
+            std::numeric_limits<double>::lowest(),
+            std::numeric_limits<double>::lowest(),
+            std::numeric_limits<double>::lowest()};
 
-using Rotation3f = Rotation<3, float>;
+        constexpr auto default_pos = Position3f{Position3f::default_value};
+        constexpr auto default_scale = Scale3f{Scale3f::default_value};
+        constexpr auto default_rot = Rotation3f{Rotation3f::default_value};
 
-template<std::size_t D, typename T>
-struct Scale {
-    static constexpr std::string_view name{"Scale"};
+        // todo : avoid that
 
-    glm::vec<static_cast<int>(D), T> component{1.0, 1.0, 1.0};
-};
+        auto pos = world.try_get<const Position3f>(e);
+        if (pos == nullptr) { pos = &default_pos; }
 
-using Scale3f = Scale<3, float>;
+        auto scale = world.try_get<const Scale3f>(e);
+        if (scale == nullptr) { scale = &default_scale; }
 
-struct Name {
-    static constexpr std::string_view name{"Name"};
+        auto rot = world.try_get<const Rotation3f>(e);
+        if (rot == nullptr) { rot = &default_rot; }
 
-    std::string component;
+        auto model = glm::dmat4(1.0);
+        model = glm::translate(model, pos->component);
+        model = glm::rotate(model, glm::radians(rot->component.x), glm::dvec3(1.0, 0.0, 0.0));
+        model = glm::rotate(model, glm::radians(rot->component.y), glm::dvec3(0.0, 1.0, 0.0));
+        model = glm::rotate(model, glm::radians(rot->component.z), glm::dvec3(0.0, 0.0, 1.0));
+        model = glm::scale(model, scale->component);
+
+        constexpr auto size_stride = 3;
+        for (auto i = 0ul; i != vertices.size(); i += size_stride) {
+            const auto projected = model * glm::dvec4{vertices[i], vertices[i + 1], vertices[i + 2], 1};
+
+            min.x = std::min(min.x, projected.x);
+            min.y = std::min(min.y, projected.y);
+            min.z = std::min(min.z, projected.z);
+
+            max.x = std::max(max.x, projected.x);
+            max.y = std::max(max.y, projected.y);
+            max.z = std::max(max.z, projected.z);
+        }
+
+        AABB *aabb = world.try_get<AABB>(e);
+        if (aabb == nullptr) {
+            const auto guizmo = world.create();
+
+            // clang-format off
+            constexpr auto outlined_cube_positions = std::to_array({
+                -0.5f, -0.5f, +0.5f,
+                +0.5f, -0.5f, +0.5f,
+                +0.5f, +0.5f, +0.5f,
+                -0.5f, +0.5f, +0.5f,
+                -0.5f, -0.5f, -0.5f,
+                +0.5f, -0.5f, -0.5f,
+                +0.5f, +0.5f, -0.5f,
+                -0.5f, +0.5f, -0.5f
+            });
+
+            constexpr auto outlined_cube_colors = std::to_array({
+                0.0f, 0.0f, 0.0f, 1.0f,
+                0.0f, 0.0f, 0.0f, 1.0f,
+                0.0f, 0.0f, 0.0f, 1.0f,
+                0.0f, 0.0f, 0.0f, 1.0f,
+                0.0f, 0.0f, 0.0f, 1.0f,
+                0.0f, 0.0f, 0.0f, 1.0f,
+                0.0f, 0.0f, 0.0f, 1.0f,
+                0.0f, 0.0f, 0.0f, 1.0f
+            });
+
+            constexpr auto outlined_cube_indices = std::to_array<std::uint32_t>({
+                0, 1, 1, 2, 2, 3, 3, 0, // Front
+                4, 5, 5, 6, 6, 7, 7, 4, // Back
+                0, 4, 1, 5, 2, 6, 3, 7
+            });
+            // clang-format on
+
+            Render::VBO<Render::VAO::Attribute::POSITION>::emplace(world, guizmo, outlined_cube_positions, 3);
+            Render::VBO<Render::VAO::Attribute::COLOR>::emplace(world, guizmo, outlined_cube_colors, 4);
+
+            Render::EBO::emplace(world, guizmo, outlined_cube_indices);
+            world.get<Render::VAO>(guizmo).mode = Render::VAO::DisplayMode::LINES;
+            const auto parent_name = world.try_get<Name>(e);
+            const auto name = parent_name != nullptr ? std::string{parent_name->name} : fmt::format("{}", e);
+            world.emplace<Name>(guizmo, fmt::format("<aabb::guizmo#{}>", name));
+
+            aabb = &world.emplace<AABB>(e, min, max, guizmo);
+        } else {
+            aabb->min = min;
+            aabb->max = max;
+        }
+
+        world.emplace_or_replace<Position3f>(aabb->guizmo, *pos);
+        world.emplace_or_replace<Rotation3f>(aabb->guizmo, *rot);
+        world.emplace_or_replace<Scale3f>(aabb->guizmo, *scale);
+
+        return *aabb;
+    }
 };
 
 // todo : use units package
@@ -233,7 +355,7 @@ struct Velocity {
     glm::vec<static_cast<int>(D), T> component{};
 };
 
-using Velocity3f = Velocity<3, float>;
+using Velocity3f = Velocity<3, double>;
 
 template<std::size_t D, typename T>
 struct Gravitable {
@@ -242,7 +364,7 @@ struct Gravitable {
     glm::vec<static_cast<int>(D), T> component{};
 };
 
-using Gravitable3f = Gravitable<3, float>;
+using Gravitable3f = Gravitable<3, double>;
 
 struct Mesh {
     static constexpr std::string_view name{"Mesh"};
@@ -252,20 +374,18 @@ struct Mesh {
 
     bool loaded_successfully;
 
-    static auto emplace(entt::registry &world, const entt::entity &entity, const std::string &filepath)
-        -> Mesh &
+    static auto emplace(entt::registry &world, const entt::entity &entity, const std::string &filepath) -> Mesh &
     {
         auto loader = world.ctx<ResourceLoader *>();
         auto model = loader->load<kawe::Model>(filepath);
 
-        Mesh mesh { filepath, std::filesystem::path(filepath).filename(), false };
+        Mesh mesh{filepath, std::filesystem::path(filepath).filename(), false};
 
         spdlog::info(mesh.filepath);
         spdlog::info(mesh.model_name);
         spdlog::info(mesh.loaded_successfully);
 
-        if (!model)
-            return world.emplace<Mesh>(entity, mesh);
+        if (!model) return world.emplace<Mesh>(entity, mesh);
 
         const Render::VAO *vao{nullptr};
         if (vao = world.try_get<Render::VAO>(entity); !vao) { vao = &Render::VAO::emplace(world, entity); }
@@ -281,6 +401,24 @@ struct Mesh {
     }
 };
 
+
+struct Collider {
+    static constexpr std::string_view name{"Collider"};
+
+    enum class CollisionStep {
+        NONE, // no collision at all
+        AABB, // aabb colliding
+        // SAT, // check if there is a real collision //
+        // https://en.wikipedia.org/wiki/Hyperplane_separation_theorem
+        // STATIC_RESOLVE or PHYSIC_RESOLVE
+    };
+
+    CollisionStep step = CollisionStep::NONE;
+
+    // todo ? : keep a reference of the entity colliding with ?
+    // std::vector<entt::entity>
+};
+
 using Component = std::variant<
     std::monostate,
     Name,
@@ -293,6 +431,8 @@ using Component = std::variant<
     Scale3f,
     Gravitable3f,
     Velocity3f,
-    Mesh>;
+    Mesh,
+    Collider,
+    AABB>;
 
 } // namespace kawe

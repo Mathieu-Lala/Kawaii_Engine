@@ -18,10 +18,13 @@
 #include "graphics/Shader.hpp"
 #include "component.hpp"
 #include "Camera.hpp"
+#include "State.hpp"
+
 #include "resources/ResourceLoader.hpp"
 
 #include "widgets/ComponentInspector.hpp"
 #include "widgets/EntityHierarchy.hpp"
+
 
 using namespace std::chrono_literals;
 
@@ -70,16 +73,42 @@ public:
 
         glfwSwapInterval(0);
 
+        world.on_destroy<Render::VAO>().connect<Render::VAO::on_destroy>();
+        world.on_destroy<Render::VBO<Render::VAO::Attribute::POSITION>>()
+            .connect<Render::VBO<Render::VAO::Attribute::POSITION>::on_destroy>();
+        world.on_destroy<Render::VBO<Render::VAO::Attribute::COLOR>>()
+            .connect<Render::VBO<Render::VAO::Attribute::COLOR>::on_destroy>();
+        world.on_destroy<Render::EBO>().connect<Render::EBO::on_destroy>();
+
+        const auto update_aabb = [](entt::registry &reg, entt::entity e) -> void {
+            if (const auto collider = reg.try_get<Collider>(e); collider != nullptr) {
+                if (const auto vbo = reg.try_get<Render::VBO<Render::VAO::Attribute::POSITION>>(e);
+                    vbo != nullptr) {
+                    AABB::emplace(reg, e, vbo->vertices);
+                }
+            }
+        };
+
+        world.on_construct<Position3f>().connect<update_aabb>();
+        world.on_construct<Position3f>().connect<update_aabb>();
+        world.on_construct<Position3f>().connect<update_aabb>();
+
+        world.on_update<Position3f>().connect<update_aabb>();
+        world.on_update<Rotation3f>().connect<update_aabb>();
+        world.on_update<Scale3f>().connect<update_aabb>();
+
+        world.on_construct<Collider>().connect<update_aabb>();
+
+        world.on_construct<Render::VBO<Render::VAO::Attribute::POSITION>>().connect<update_aabb>();
+        world.on_update<Render::VBO<Render::VAO::Attribute::POSITION>>().connect<update_aabb>();
+
         world.set<entt::dispatcher *>(&dispatcher);
         world.set<ResourceLoader *>(&loader);
-#define SET_DESTRUCTOR(Type) world.on_destroy<Type>().connect<Type::on_destroy>()
-        SET_DESTRUCTOR(Render::VAO);
-        SET_DESTRUCTOR(Render::VBO<Render::VAO::Attribute::POSITION>);
-        SET_DESTRUCTOR(Render::VBO<Render::VAO::Attribute::COLOR>);
-        SET_DESTRUCTOR(Render::EBO);
-#undef SET_DESTRUCTOR
-
         state = std::make_unique<State>(*window);
+        state->view =
+            glm::lookAt(state->camera.getPosition(), state->camera.getTargetCenter(), state->camera.getUp());
+        state->projection = state->camera.getProjection();
+        world.set<State *>(state.get());
     }
 
     ~Engine()
@@ -161,57 +190,6 @@ private:
     ComponentInspector component_inspector;
     EntityHierarchy entity_hierarchy;
 
-    struct State {
-        static constexpr std::string_view VERT_SH = R"(#version 450
-layout (location = 0) in vec3 inPos;
-layout (location = 1) in vec4 inColors;
-
-uniform mat4 model;
-uniform mat4 view;
-uniform mat4 projection;
-
-out vec4 fragColors;
-
-void main()
-{
-    gl_Position = projection * view * model * vec4(inPos, 1.0f);
-    fragColors = inColors;
-}
-)";
-
-        static constexpr std::string_view FRAG_SH = R"(#version 450
-in vec4 fragColors;
-out vec4 FragColor;
-
-void main()
-{
-    FragColor = fragColors;
-}
-)";
-
-        State(const Window &window) : shader{VERT_SH, FRAG_SH}, camera{window, glm::vec3{5, 5, 5}}
-        {
-            shader.use();
-
-            for (const auto &i : magic_enum::enum_values<MouseButton::Button>()) {
-                state_mouse_button[i] = false;
-            }
-            for (const auto &i : magic_enum::enum_values<Key::Code>()) { keyboard_state[i] = false; }
-        }
-
-        Shader shader;
-
-        Camera camera;
-
-        bool is_running = true;
-
-        glm::dvec2 mouse_pos{};
-        glm::dvec2 mouse_pos_when_pressed{};
-
-        std::unordered_map<MouseButton::Button, bool> state_mouse_button;
-        std::unordered_map<Key::Code, bool> keyboard_state;
-    };
-
     std::unique_ptr<State> state;
 
     auto on_time_elapsed(const kawe::TimeElapsed &e) -> void
@@ -226,19 +204,19 @@ void main()
                 for (const auto &[button, pressed] : state->state_mouse_button) {
                     if (pressed) {
                         state->camera.handleMouseInput(
-                            button, state->mouse_pos, state->mouse_pos_when_pressed, dt_nano);
+                            button, state->mouse_pos, state->mouse_pos_when_pressed, dt_secs);
                     }
                 }
             }
             if (state->camera.hasChanged<Camera::Matrix::VIEW>()) {
-                const auto view = glm::lookAt(
+                state->view = glm::lookAt(
                     state->camera.getPosition(), state->camera.getTargetCenter(), state->camera.getUp());
-                state->shader.setUniform("view", view);
+                state->shader.setUniform("view", state->view);
                 state->camera.setChangedFlag<Camera::Matrix::VIEW>(false);
             }
             if (state->camera.hasChanged<Camera::Matrix::PROJECTION>()) {
-                const auto projection = state->camera.getProjection();
-                state->shader.setUniform("projection", projection);
+                state->projection = state->camera.getProjection();
+                state->shader.setUniform("projection", state->projection);
                 state->camera.setChangedFlag<Camera::Matrix::PROJECTION>(false);
             }
         }
@@ -246,15 +224,65 @@ void main()
         for (const auto &entity : world.view<Position3f, Velocity3f>()) {
             const auto &vel = world.get<Velocity3f>(entity);
             world.patch<Position3f>(entity, [&vel, &dt_secs](auto &pos) {
-                pos.component += vel.component * static_cast<float>(dt_secs);
+                pos.component += vel.component * static_cast<double>(dt_secs);
             });
         }
 
         for (const auto &entity : world.view<Gravitable3f, Velocity3f>()) {
             const auto &gravity = world.get<Gravitable3f>(entity);
             world.patch<Velocity3f>(entity, [&gravity, &dt_secs](auto &vel) {
-                vel.component += gravity.component * static_cast<float>(dt_secs);
+                vel.component += gravity.component * static_cast<double>(dt_secs);
             });
+        }
+
+        // todo : call this not every frame but only when the AABB changed
+        // AABB alogrithm = really simple and fast collision detection
+        for (const auto &entity1 : world.view<Collider, AABB>()) {
+            const auto aabb1 = world.get<AABB>(entity1);
+            const auto collider1 = world.get<Collider>(entity1);
+
+            bool has_aabb_collision = false;
+
+            for (const auto &entity2 : world.view<Collider, AABB>()) {
+                if (entity1 == entity2) continue;
+                const auto aabb2 = world.get<AABB>(entity2);
+
+                has_aabb_collision |= (aabb1.min.x <= aabb2.max.x && aabb1.max.x >= aabb2.min.x)
+                                      && (aabb1.min.y <= aabb2.max.y && aabb1.max.y >= aabb2.min.y)
+                                      && (aabb1.min.z <= aabb2.max.z && aabb1.max.z >= aabb2.min.z);
+            }
+
+            if (has_aabb_collision) {
+                world.patch<Collider>(
+                    entity1, [](auto &collider) { collider.step = Collider::CollisionStep::AABB; });
+
+                // todo : this should be wrapped in a helper function ?
+                const auto &vbo_color = world.get<Render::VBO<Render::VAO::Attribute::COLOR>>(aabb1.guizmo);
+                std::vector<float> color_red{};
+                for (auto i = 0ul; i != vbo_color.vertices.size(); i += vbo_color.stride_size) {
+                    color_red.emplace_back(1.0f); // r
+                    color_red.emplace_back(0.0f); // g
+                    color_red.emplace_back(0.0f); // b
+                    color_red.emplace_back(1.0f); // a
+                }
+                Render::VBO<Render::VAO::Attribute::COLOR>::emplace(world, aabb1.guizmo, color_red, 4);
+            } else {
+                if (collider1.step != Collider::CollisionStep::NONE) {
+                    world.patch<Collider>(
+                        entity1, [](auto &collider) { collider.step = Collider::CollisionStep::NONE; });
+
+                    // todo : this should be wrapped in a helper function ?
+                    const auto &vbo_color = world.get<Render::VBO<Render::VAO::Attribute::COLOR>>(aabb1.guizmo);
+                    std::vector<float> color_black{};
+                    for (auto i = 0ul; i != vbo_color.vertices.size(); i += vbo_color.stride_size) {
+                        color_black.emplace_back(0.0f); // r
+                        color_black.emplace_back(0.0f); // g
+                        color_black.emplace_back(0.0f); // b
+                        color_black.emplace_back(1.0f); // a
+                    }
+                    Render::VBO<Render::VAO::Attribute::COLOR>::emplace(world, aabb1.guizmo, color_black, 4);
+                }
+            }
         }
 
         dispatcher.trigger<kawe::TimeElapsed>(e);
@@ -289,11 +317,11 @@ void main()
         const auto render =
             [&shader]<bool has_ebo>(
                 const Render::VAO &vao, const Position3f &pos, const Rotation3f &rot, const Scale3f &scale) {
-                auto model = glm::mat4(1.0f);
+                auto model = glm::dmat4(1.0);
                 model = glm::translate(model, pos.component);
-                model = glm::rotate(model, glm::radians(rot.component.x), glm::vec3(1.0f, 0.0f, 0.0f));
-                model = glm::rotate(model, glm::radians(rot.component.y), glm::vec3(0.0f, 1.0f, 0.0f));
-                model = glm::rotate(model, glm::radians(rot.component.z), glm::vec3(0.0f, 0.0f, 1.0f));
+                model = glm::rotate(model, glm::radians(rot.component.x), glm::dvec3(1.0, 0.0, 0.0));
+                model = glm::rotate(model, glm::radians(rot.component.y), glm::dvec3(0.0, 1.0, 0.0));
+                model = glm::rotate(model, glm::radians(rot.component.z), glm::dvec3(0.0, 0.0, 1.0));
                 model = glm::scale(model, scale.component);
                 shader.setUniform("model", model);
 
@@ -305,9 +333,6 @@ void main()
                 }
             };
 
-        [[maybe_unused]] static constexpr auto NO_POSITION = glm::vec3{0.0f, 0.0f, 0.0f};
-        [[maybe_unused]] static constexpr auto NO_ROTATION = glm::vec3{0.0f, 0.0f, 0.0f};
-        [[maybe_unused]] static constexpr auto NO_SCALE = glm::vec3{1.0f, 1.0f, 1.0f};
 
         // note : it should be a better way..
         // todo create a matrix of callback templated somthing something
@@ -316,37 +341,38 @@ void main()
 
         world.view<Render::VAO>(entt::exclude<Render::EBO, Position3f, Rotation3f, Scale3f>)
             .each([&render](const auto &vao) {
-                render.operator()<false>(vao, {NO_POSITION}, {NO_ROTATION}, {NO_SCALE});
+                render.operator()<false>(
+                    vao, {Position3f::default_value}, {Rotation3f::default_value}, {Scale3f::default_value});
             });
 
         world.view<Render::VAO, Position3f>(entt::exclude<Render::EBO, Rotation3f, Scale3f>)
             .each([&render](const auto &vao, const auto &pos) {
-                render.operator()<false>(vao, pos, {NO_ROTATION}, {NO_SCALE});
+                render.operator()<false>(vao, pos, {Rotation3f::default_value}, {Scale3f::default_value});
             });
 
         world.view<Render::VAO, Rotation3f>(entt::exclude<Render::EBO, Position3f, Scale3f>)
             .each([&render](const auto &vao, const auto &rot) {
-                render.operator()<false>(vao, {NO_POSITION}, rot, {NO_SCALE});
+                render.operator()<false>(vao, {Position3f::default_value}, rot, {Scale3f::default_value});
             });
 
         world.view<Render::VAO, Scale3f>(entt::exclude<Render::EBO, Position3f, Rotation3f>)
             .each([&render](const auto &vao, const auto &scale) {
-                render.operator()<false>(vao, {NO_POSITION}, {NO_ROTATION}, scale);
+                render.operator()<false>(vao, {Position3f::default_value}, {Rotation3f::default_value}, scale);
             });
 
         world.view<Render::VAO, Position3f, Scale3f>(entt::exclude<Render::EBO, Rotation3f>)
             .each([&render](const auto &vao, const auto &pos, const auto &scale) {
-                render.operator()<false>(vao, pos, {NO_ROTATION}, scale);
+                render.operator()<false>(vao, pos, {Rotation3f::default_value}, scale);
             });
 
         world.view<Render::VAO, Rotation3f, Scale3f>(entt::exclude<Render::EBO, Position3f>)
             .each([&render](const auto &vao, const auto &rot, const auto &scale) {
-                render.operator()<false>(vao, {NO_POSITION}, rot, scale);
+                render.operator()<false>(vao, {Position3f::default_value}, rot, scale);
             });
 
         world.view<Render::VAO, Position3f, Rotation3f>(entt::exclude<Render::EBO, Scale3f>)
             .each([&render](const auto &vao, const auto &pos, const auto &rot) {
-                render.operator()<false>(vao, pos, rot, {NO_SCALE});
+                render.operator()<false>(vao, pos, rot, {Scale3f::default_value});
             });
 
         world.view<Render::VAO, Position3f, Rotation3f, Scale3f>(entt::exclude<Render::EBO>)
@@ -358,37 +384,38 @@ void main()
 
         world.view<Render::EBO, Render::VAO>(entt::exclude<Position3f, Rotation3f, Scale3f>)
             .each([&render](const auto &, const auto &vao) {
-                render.operator()<true>(vao, {NO_POSITION}, {NO_ROTATION}, {NO_SCALE});
+                render.operator()<true>(
+                    vao, {Position3f::default_value}, {Rotation3f::default_value}, {Scale3f::default_value});
             });
 
         world.view<Render::EBO, Render::VAO, Position3f>(entt::exclude<Rotation3f, Scale3f>)
             .each([&render](const auto &, const auto &vao, const auto &pos) {
-                render.operator()<true>(vao, pos, {NO_ROTATION}, {NO_SCALE});
+                render.operator()<true>(vao, pos, {Rotation3f::default_value}, {Scale3f::default_value});
             });
 
         world.view<Render::EBO, Render::VAO, Rotation3f>(entt::exclude<Position3f, Scale3f>)
             .each([&render](const auto &, const auto &vao, const auto &rot) {
-                render.operator()<true>(vao, {NO_POSITION}, rot, {NO_SCALE});
+                render.operator()<true>(vao, {Position3f::default_value}, rot, {Scale3f::default_value});
             });
 
         world.view<Render::EBO, Render::VAO, Scale3f>(entt::exclude<Position3f, Rotation3f>)
             .each([&render](const auto &, const auto &vao, const auto &scale) {
-                render.operator()<true>(vao, {NO_POSITION}, {NO_ROTATION}, scale);
+                render.operator()<true>(vao, {Position3f::default_value}, {Rotation3f::default_value}, scale);
             });
 
         world.view<Render::EBO, Render::VAO, Position3f, Scale3f>(entt::exclude<Rotation3f>)
             .each([&render](const auto &, const auto &vao, const auto &pos, const auto &scale) {
-                render.operator()<true>(vao, pos, {NO_ROTATION}, scale);
+                render.operator()<true>(vao, pos, {Rotation3f::default_value}, scale);
             });
 
         world.view<Render::EBO, Render::VAO, Rotation3f, Scale3f>(entt::exclude<Position3f>)
             .each([&render](const auto &, const auto &vao, const auto &rot, const auto &scale) {
-                render.operator()<true>(vao, {NO_POSITION}, rot, scale);
+                render.operator()<true>(vao, {Position3f::default_value}, rot, scale);
             });
 
         world.view<Render::EBO, Render::VAO, Position3f, Rotation3f>(entt::exclude<Scale3f>)
             .each([&render](const auto &, const auto &vao, const auto &pos, const auto &rot) {
-                render.operator()<true>(vao, pos, rot, {NO_SCALE});
+                render.operator()<true>(vao, pos, rot, {Scale3f::default_value});
             });
 
         world.view<Render::EBO, Render::VAO, Position3f, Rotation3f, Scale3f>().each(
@@ -396,6 +423,6 @@ void main()
                 render.operator()<true>(vao, pos, rot, scale);
             });
     }
-};
+}; // namespace kawe
 
 } // namespace kawe
