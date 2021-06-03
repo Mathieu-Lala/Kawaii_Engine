@@ -2,13 +2,16 @@
 
 #include <entt/entt.hpp>
 #include <spdlog/spdlog.h>
+#include <filesystem>
+#include <fstream>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp>
 
-#include "stb_image.h"
+#include <stb_image.h>
 
 // data structures.
+#include "graphics/Shader.hpp"
 #include "Texture.hpp"
 #include "Model.hpp"
 
@@ -133,6 +136,39 @@ namespace kawe {
         }
     )
 
+    // creates a texture loader.
+    CREATE_LOADER_CLASS(Shader,
+        auto load(const std::string &filepath) -> std::shared_ptr<Shader> {
+
+            auto extension = std::filesystem::path(filepath).extension();
+            ShaderType new_shader_type { ShaderType::UNKNOWN };
+
+            // searching for the correct shader type using the file's extension.
+            for (const auto &[stype, _] : SHADER_TYPES)
+                if (extension == magic_enum::enum_name(stype))
+                    new_shader_type = stype;
+
+            if (new_shader_type == ShaderType::UNKNOWN) {
+                spdlog::warn("failed to loader shader at '{}': unknow format.", filepath);
+                return nullptr;
+            }
+
+            // reading source code.
+            std::ifstream shader_file { filepath };
+
+            if (shader_file.is_open()) {
+                std::string shader_code {
+                    (std::istreambuf_iterator<char>(shader_file)),
+                    (std::istreambuf_iterator<char>())
+                };
+
+                Shader shader { shader_code, new_shader_type };
+            }
+
+            return nullptr;
+        }
+    )
+
     // global resource loader class that encapsulate all sub-loaders.
     class ResourceLoader {
     public:
@@ -145,6 +181,7 @@ namespace kawe {
 
     private:
         CREATE_LOADER_INSTANCE(Texture)
+        CREATE_LOADER_INSTANCE(Shader)
         CREATE_LOADER_INSTANCE(Model)
     };
 }

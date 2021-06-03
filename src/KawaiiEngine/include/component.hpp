@@ -261,10 +261,6 @@ struct Mesh {
 
         Mesh mesh { filepath, std::filesystem::path(filepath).filename(), false };
 
-        spdlog::info(mesh.filepath);
-        spdlog::info(mesh.model_name);
-        spdlog::info(mesh.loaded_successfully);
-
         if (!model)
             return world.emplace<Mesh>(entity, mesh);
 

@@ -96,39 +96,12 @@ public:
 
     auto start()
     {
-        constexpr auto VERT_SH = R"(#version 450
-layout (location = 0) in vec3 inPos;
-layout (location = 1) in vec4 inColors;
-
-uniform mat4 model;
-uniform mat4 view;
-uniform mat4 projection;
-
-out vec4 fragColors;
-
-void main()
-{
-    gl_Position = projection * view * model * vec4(inPos, 1.0f);
-    fragColors = inColors;
-}
-)";
-
-        constexpr auto FRAG_SH = R"(#version 450
-in vec4 fragColors;
-out vec4 FragColor;
-
-void main()
-{
-    FragColor = fragColors;
-}
-)";
-
         CALL_OPEN_GL(::glEnable(GL_DEPTH_TEST));
         CALL_OPEN_GL(::glEnable(GL_BLEND));
         CALL_OPEN_GL(::glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
 
-        Shader shader(VERT_SH, FRAG_SH);
-        shader.use();
+        // Shader shader(VERT_SH, FRAG_SH);
+        // shader.use();
 
         Camera camera{*window, glm::vec3{5, 5, 5}};
 
@@ -203,14 +176,14 @@ void main()
                                 }
                             }
                             if (camera.hasChanged<Camera::Matrix::VIEW>()) {
-                                const auto view =
-                                    glm::lookAt(camera.getPosition(), camera.getTargetCenter(), camera.getUp());
-                                shader.setUniform("view", view);
+                                // const auto view =
+                                //     glm::lookAt(camera.getPosition(), camera.getTargetCenter(), camera.getUp());
+                                // shader.setUniform("view", view);
                                 camera.setChangedFlag<Camera::Matrix::VIEW>(false);
                             }
                             if (camera.hasChanged<Camera::Matrix::PROJECTION>()) {
-                                const auto projection = camera.getProjection();
-                                shader.setUniform("projection", projection);
+                                // const auto projection = camera.getProjection();
+                                // shader.setUniform("projection", projection);
                                 camera.setChangedFlag<Camera::Matrix::PROJECTION>(false);
                             }
                         }
@@ -249,7 +222,7 @@ void main()
                         glClearColor(CLEAR_COLOR.r, CLEAR_COLOR.g, CLEAR_COLOR.b, CLEAR_COLOR.a);
                         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-                        system_rendering(shader);
+                        // system_rendering(shader);
 
                         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
