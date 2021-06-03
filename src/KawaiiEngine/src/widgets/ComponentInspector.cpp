@@ -211,6 +211,29 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &, entt::enti
     ImGui::Text(fmt::format("{} = {}", enum_name.data(), magic_enum::enum_name(collider.step)).data());
 }
 
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity, const Parent &parent) const
+    -> void
+{
+    ImGui::Text(
+        "parent = '%s'",
+        world.valid(parent.component) ? world.get<Name>(parent.component).component.data() : "null");
+}
+
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity, const Children &children) const
+    -> void
+{
+    if (children.component.empty()) {
+        ImGui::Text("No children yet");
+    } else {
+        int it = 0;
+        for (const auto &i : children.component) {
+            ImGui::Text("children[%d] = '%s'", it++, world.get<Name>(i).component.data());
+        }
+    }
+}
+
 auto kawe::ComponentInspector::draw(entt::registry &world) -> void
 {
     ImGui::Begin("KAWE: Component Inspector");
@@ -230,12 +253,12 @@ auto kawe::ComponentInspector::draw(entt::registry &world) -> void
             [try_variant = [&world, this]<typename Variant>(entt::entity e) {
                 if (const auto component = world.try_get<Variant>(e); component != nullptr) {
                     if (ImGui::BeginTabItem(Variant::name.data())) {
-                        drawComponentTweaker(world, selected.value(), *component);
-                        // ImGui::SameLine();
                         if (ImGui::Button(fmt::format("Delete Component###{}", Variant::name).data())) {
                             spdlog::warn("Deleting component {} of {}", Variant::name, e);
                             world.remove<Variant>(e);
                         }
+                        ImGui::Separator();
+                        drawComponentTweaker(world, selected.value(), *component);
                         ImGui::EndTabItem();
                     }
                 }
@@ -264,6 +287,7 @@ auto kawe::ComponentInspector::draw(entt::registry &world) -> void
     }
     ImGui::EndChild();
     if (selected.has_value()) {
+        ImGui::Separator();
         if (ImGui::Button("Delete Entity")) {
             spdlog::warn("Deleting entity {}", selected.value());
             world.destroy(selected.value());
