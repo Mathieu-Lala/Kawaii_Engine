@@ -16,6 +16,19 @@
 #include "State.hpp"
 
 namespace kawe {
+
+struct Children {
+    static constexpr std::string_view name{"Children"};
+
+    std::vector<entt::entity> component;
+};
+
+struct Parent {
+    static constexpr std::string_view name{"Parent"};
+
+    entt::entity component{entt::null};
+};
+
 struct Name {
     static constexpr std::string_view name{"Name"};
 
@@ -155,8 +168,6 @@ struct Render {
                 });
             }
 
-            // if (A == VAO::Attribute::POSITION) { AABB::emplace(world, entity, obj.vertices); }
-
             if (const auto vbo = world.try_get<VBO<A>>(entity); vbo != nullptr) {
                 world.remove<VBO<A>>(entity);
             }
@@ -241,7 +252,7 @@ struct AABB {
     glm::dvec3 min;
     glm::dvec3 max;
 
-    entt::entity guizmo = std::numeric_limits<entt::entity>::max();
+    entt::entity guizmo{entt::null};
 
     static auto emplace(entt::registry &world, entt::entity e, const std::vector<float> &vertices) -> AABB &
     {
@@ -294,17 +305,6 @@ struct AABB {
             const auto guizmo = world.create();
 
             // clang-format off
-            constexpr auto outlined_cube_positions = std::to_array({
-                -0.5f, -0.5f, +0.5f,
-                +0.5f, -0.5f, +0.5f,
-                +0.5f, +0.5f, +0.5f,
-                -0.5f, +0.5f, +0.5f,
-                -0.5f, -0.5f, -0.5f,
-                +0.5f, -0.5f, -0.5f,
-                +0.5f, +0.5f, -0.5f,
-                -0.5f, +0.5f, -0.5f
-            });
-
             constexpr auto outlined_cube_colors = std::to_array({
                 0.0f, 0.0f, 0.0f, 1.0f,
                 0.0f, 0.0f, 0.0f, 1.0f,
@@ -315,7 +315,6 @@ struct AABB {
                 0.0f, 0.0f, 0.0f, 1.0f,
                 0.0f, 0.0f, 0.0f, 1.0f
             });
-
             constexpr auto outlined_cube_indices = std::to_array<std::uint32_t>({
                 0, 1, 1, 2, 2, 3, 3, 0, // Front
                 4, 5, 5, 6, 6, 7, 7, 4, // Back
@@ -323,7 +322,6 @@ struct AABB {
             });
             // clang-format on
 
-            Render::VBO<Render::VAO::Attribute::POSITION>::emplace(world, guizmo, outlined_cube_positions, 3);
             Render::VBO<Render::VAO::Attribute::COLOR>::emplace(world, guizmo, outlined_cube_colors, 4);
 
             Render::EBO::emplace(world, guizmo, outlined_cube_indices);
@@ -331,16 +329,27 @@ struct AABB {
             const auto parent_name = world.try_get<Name>(e);
             const auto name = parent_name != nullptr ? std::string{parent_name->name} : fmt::format("{}", e);
             world.emplace<Name>(guizmo, fmt::format("<aabb::guizmo#{}>", name));
+            world.emplace<Parent>(guizmo, e);
 
             aabb = &world.emplace<AABB>(e, min, max, guizmo);
+            world.get_or_emplace<Children>(e).component.push_back(guizmo);
+
         } else {
             aabb->min = min;
             aabb->max = max;
         }
 
-        world.emplace_or_replace<Position3f>(aabb->guizmo, *pos);
-        world.emplace_or_replace<Rotation3f>(aabb->guizmo, *rot);
-        world.emplace_or_replace<Scale3f>(aabb->guizmo, *scale);
+        const auto outlined_cube_positions = std::to_array<float>(
+            {static_cast<float>(min.x), static_cast<float>(min.y), static_cast<float>(max.z),
+             static_cast<float>(max.x), static_cast<float>(min.y), static_cast<float>(max.z),
+             static_cast<float>(max.x), static_cast<float>(max.y), static_cast<float>(max.z),
+             static_cast<float>(min.x), static_cast<float>(max.y), static_cast<float>(max.z),
+             static_cast<float>(min.x), static_cast<float>(min.y), static_cast<float>(min.z),
+             static_cast<float>(max.x), static_cast<float>(min.y), static_cast<float>(min.z),
+             static_cast<float>(max.x), static_cast<float>(max.y), static_cast<float>(min.z),
+             static_cast<float>(min.x), static_cast<float>(max.y), static_cast<float>(min.z)});
+
+        Render::VBO<Render::VAO::Attribute::POSITION>::emplace(world, aabb->guizmo, outlined_cube_positions, 3);
 
         return *aabb;
     }
@@ -421,17 +430,23 @@ struct Collider {
 
 using Component = std::variant<
     std::monostate,
+    // system
     Name,
+    Parent,
+    Children,
+    // rendering
+    Mesh,
     Render::VAO,
     Render::EBO,
     Render::VBO<Render::VAO::Attribute::POSITION>,
     Render::VBO<Render::VAO::Attribute::COLOR>,
+    // transform
     Position3f,
     Rotation3f,
     Scale3f,
+    // physics
     Gravitable3f,
     Velocity3f,
-    Mesh,
     Collider,
     AABB>;
 
