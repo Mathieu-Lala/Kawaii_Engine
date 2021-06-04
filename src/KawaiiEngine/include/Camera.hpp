@@ -4,11 +4,15 @@
 
 #include "Event.hpp"
 
+#include "helpers/Rectangle.hpp"
+
 namespace kawe {
 
+// todo : remove this class an convert it to an entity
 struct Camera {
-    Camera(const Window &window, glm::dvec3 pos) :
-        m_window{window}, position{std::move(pos)}, up{glm::normalize(glm::dvec3{0.0f, 1.0f, 0.0})}
+    Camera(const Window &window, glm::dvec3 pos, Rect4<float> viewport) :
+        m_window{window}, m_viewport{viewport}, position{std::move(pos)}, up{glm::normalize(
+                                                                              glm::dvec3{0.0f, 1.0f, 0.0})}
     {
         getFrustrumInfo();
     }
@@ -24,15 +28,23 @@ struct Camera {
 
     auto getProjection() -> glm::dmat4
     {
-        //        const auto projection_provider = std::to_array<std::function<glm::mat4(const Window &)>>(
-        //            {[](const Window &w) {
-        //                 return glm::perspective(glm::radians(45.0f), w.getAspectRatio<float>(), 0.1f, 100.0f);
-        //             },
-        //             [](const Window &) { return glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, -5.0f, 5.0f); }});
-        //        return projection_provider.at(static_cast<std::size_t>(projection_type))(window);
-
-        return glm::perspective(glm::radians(m_fov), m_window.getAspectRatio<double>(), m_near, m_far);
+        if (hasChanged<Camera::Matrix::PROJECTION>()) {
+            projection = glm::perspective(glm::radians(m_fov), m_window.getAspectRatio<double>(), m_near, m_far);
+            // state->shader.setUniform("projection", state->projection);
+            setChangedFlag<Camera::Matrix::PROJECTION>(false);
+        }
+        return projection;
     };
+
+    auto getView() -> glm::dmat4
+    {
+        if (hasChanged<Camera::Matrix::VIEW>()) {
+            view = glm::lookAt(getPosition(), getTargetCenter(), getUp());
+            // state->shader.setUniform("view", state->view);
+            setChangedFlag<Camera::Matrix::VIEW>(false);
+        }
+        return view;
+    }
 
     constexpr auto getPosition() const noexcept -> const glm::dvec3 & { return position; }
 
@@ -43,6 +55,8 @@ struct Camera {
         position = std::move(pos);
         setChangedFlag<Matrix::VIEW>(true);
     }
+
+    constexpr auto getViewport() const noexcept -> const Rect4<float> & { return m_viewport; }
 
     constexpr auto getTargetCenter() const noexcept -> const glm::dvec3 & { return target_center; }
 
@@ -176,7 +190,7 @@ struct Camera {
     }
 
     template<Matrix M>
-    [[nodiscard]] constexpr auto hasChanged() const noexcept
+    [[nodiscard]] constexpr auto hasChanged() const noexcept -> bool
     {
         if constexpr (M == Matrix::VIEW) {
             return m_view_changed;
@@ -187,6 +201,12 @@ struct Camera {
 
 private:
     const Window &m_window;
+
+    // normalized position of the viewport, values 0..1
+    Rect4<float> m_viewport;
+
+    glm::dmat4 projection;
+    glm::dmat4 view;
 
     glm::dvec3 position;
     glm::dvec3 target_center{0, 0, 0};

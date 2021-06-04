@@ -105,9 +105,9 @@ public:
         world.set<entt::dispatcher *>(&dispatcher);
         world.set<ResourceLoader *>(&loader);
         state = std::make_unique<State>(*window);
-        state->view =
-            glm::lookAt(state->camera.getPosition(), state->camera.getTargetCenter(), state->camera.getUp());
-        state->projection = state->camera.getProjection();
+        // state->view = glm::lookAt(
+        //     state->camera[0].getPosition(), state->camera[0].getTargetCenter(), state->camera[0].getUp());
+        // state->projection = state->camera[0].getProjection();
         world.set<State *>(state.get());
     }
 
@@ -199,25 +199,26 @@ private:
             static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(dt_nano).count())
             / 1'000'000.0;
 
-        { // note : camera logics should be a system
+        { // note : camera logics should be a system // should be trigger by a signal
             if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) {
-                for (const auto &[button, pressed] : state->state_mouse_button) {
-                    if (pressed) {
-                        state->camera.handleMouseInput(
-                            button, state->mouse_pos, state->mouse_pos_when_pressed, dt_secs);
+                for (auto &camera : state->camera) {
+                    const auto viewport = camera.getViewport();
+                    const auto window_size = window->getSize<double>();
+
+                    if (!Rect4<double>{
+                            static_cast<double>(viewport.x) * window_size.x,
+                            static_cast<double>(viewport.y) * window_size.y,
+                            static_cast<double>(viewport.w) * window_size.x,
+                            static_cast<double>(viewport.h) * window_size.y}
+                             .contains(state->mouse_pos)) {
+                        continue;
+                    }
+
+                    for (const auto &[button, pressed] : state->state_mouse_button) {
+                        if (!pressed) { continue; }
+                        camera.handleMouseInput(button, state->mouse_pos, state->mouse_pos_when_pressed, dt_secs);
                     }
                 }
-            }
-            if (state->camera.hasChanged<Camera::Matrix::VIEW>()) {
-                state->view = glm::lookAt(
-                    state->camera.getPosition(), state->camera.getTargetCenter(), state->camera.getUp());
-                state->shader.setUniform("view", state->view);
-                state->camera.setChangedFlag<Camera::Matrix::VIEW>(false);
-            }
-            if (state->camera.hasChanged<Camera::Matrix::PROJECTION>()) {
-                state->projection = state->camera.getProjection();
-                state->shader.setUniform("projection", state->projection);
-                state->camera.setChangedFlag<Camera::Matrix::PROJECTION>(false);
             }
         }
 
@@ -305,15 +306,27 @@ private:
         glClearColor(CLEAR_COLOR.r, CLEAR_COLOR.g, CLEAR_COLOR.b, CLEAR_COLOR.a);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        system_rendering(state->shader);
+        for (auto &i : state->camera) { system_rendering(i, state->shader); }
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         glfwSwapBuffers(window->get());
     }
 
-    auto system_rendering(Shader &shader) -> void
+    // todo : this should not take a shader as argument
+    auto system_rendering(Camera &camera, Shader &shader) -> void
     {
+        const auto viewport = camera.getViewport();
+        const auto window_size = window->getSize<float>();
+        ::glViewport(
+            static_cast<GLint>(viewport.x * window_size.x),
+            static_cast<GLint>(viewport.y * window_size.y),
+            static_cast<GLsizei>(viewport.w * window_size.x),
+            static_cast<GLsizei>(viewport.h * window_size.y));
+
+        shader.setUniform("view", camera.getView());
+        shader.setUniform("projection", camera.getProjection());
+
         const auto render =
             [&shader]<bool has_ebo>(
                 const Render::VAO &vao, const Position3f &pos, const Rotation3f &rot, const Scale3f &scale) {
@@ -332,7 +345,6 @@ private:
                     CALL_OPEN_GL(::glDrawArrays(static_cast<GLenum>(vao.mode), 0, vao.count));
                 }
             };
-
 
         // note : it should be a better way..
         // todo create a matrix of callback templated somthing something

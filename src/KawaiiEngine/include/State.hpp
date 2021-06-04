@@ -39,8 +39,11 @@ void main()
 }
 )";
 
-    State(const Window &window) : shader{VERT_SH, FRAG_SH}, camera{window, glm::vec3{5, 5, 5}}
+    State(const Window &window) : shader{VERT_SH, FRAG_SH} // , camera{window, glm::vec3{5, 5, 5}}
     {
+        camera.emplace_back(window, glm::vec3{5.0f, 5.0f, 5.0f}, Rect4<float>{0.0f, 0.0f, 0.5f, 1.0f});
+        camera.emplace_back(window, glm::vec3{5.0f, 5.0f, 5.0f}, Rect4<float>{0.5f, 0.0f, 0.5f, 1.0f});
+
         shader.use();
 
         for (const auto &i : magic_enum::enum_values<MouseButton::Button>()) {
@@ -50,10 +53,7 @@ void main()
     }
 
     Shader shader;
-    Camera camera;
-
-    glm::dmat4 projection;
-    glm::dmat4 view;
+    std::vector<Camera> camera;
 
     bool is_running = true;
 
