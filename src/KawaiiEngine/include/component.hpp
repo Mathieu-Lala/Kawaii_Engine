@@ -400,7 +400,6 @@ struct Mesh {
         if (vao = world.try_get<Render::VAO>(entity); !vao) { vao = &Render::VAO::emplace(world, entity); }
 
         // TODO: support normals & texcoords.
-        // TODO: check if VAO & EBO aren't already emplaced.
         kawe::Render::VBO<kawe::Render::VAO::Attribute::POSITION>::emplace(world, entity, model->vertices, 3);
         kawe::Render::EBO::emplace(world, entity, model->indices);
 

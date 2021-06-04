@@ -25,25 +25,6 @@ kawe::Window::Window(
 
     events.assign(*this);
 
-    /*
-            // Prepare window
-            glfwSetWindowUserPointer(window, this);
-            glfwSetFramebufferSizeCallback(window, framebuffer_size_handler);
-            glfwSetWindowSizeCallback(window, window_resize_handler);
-            glfwSetWindowIconifyCallback(window, window_iconify_handler);
-            glfwSetWindowFocusCallback(window, window_focus_handler);
-            glfwSetWindowCloseCallback(window, window_close_handler);
-            glfwSetErrorCallback(error_handler);
-
-            // Set input callbacks
-            glfwSetKeyCallback(window, keyboard_handler);
-            glfwSetCharCallback(window, char_input_handler);
-            glfwSetMouseButtonCallback(window, mouse_button_handler);
-            glfwSetCursorPosCallback(window, mouse_move_handler);
-            glfwSetScrollCallback(window, mouse_scroll_handler);
-            glfwSetJoystickCallback(joystick_configuration_change_handler);
-    */
-
     isWindowIconofied = glfwGetWindowAttrib(window, GLFW_ICONIFIED);
     isWindowFocused = glfwGetWindowAttrib(window, GLFW_FOCUSED);
 

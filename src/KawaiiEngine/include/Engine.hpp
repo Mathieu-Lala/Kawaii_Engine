@@ -105,9 +105,6 @@ public:
         world.set<entt::dispatcher *>(&dispatcher);
         world.set<ResourceLoader *>(&loader);
         state = std::make_unique<State>(*window);
-        // state->view = glm::lookAt(
-        //     state->camera[0].getPosition(), state->camera[0].getTargetCenter(), state->camera[0].getUp());
-        // state->projection = state->camera[0].getProjection();
         world.set<State *>(state.get());
     }
 
@@ -316,6 +313,8 @@ private:
     // todo : this should not take a shader as argument
     auto system_rendering(Camera &camera, Shader &shader) -> void
     {
+        // todo : when resizing the window, the object deform
+        // this doesn t sound kind right ...
         const auto viewport = camera.getViewport();
         const auto window_size = window->getSize<float>();
         ::glViewport(
