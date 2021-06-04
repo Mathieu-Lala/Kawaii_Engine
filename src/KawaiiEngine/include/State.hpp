@@ -57,6 +57,8 @@ void main()
 
     bool is_running = true;
 
+    glm::vec4 clear_color{0.0f, 1.0f, 0.2f, 1.0f};
+
     glm::dvec2 mouse_pos{};
     glm::dvec2 mouse_pos_when_pressed{};
 

@@ -335,8 +335,10 @@ struct AABB {
             world.get_or_emplace<Children>(e).component.push_back(guizmo);
 
         } else {
-            aabb->min = min;
-            aabb->max = max;
+            world.patch<AABB>(e, [&min, &max](auto &obj) {
+                obj.min = min;
+                obj.max = max;
+            });
         }
 
         const auto outlined_cube_positions = std::to_array<float>(
@@ -413,6 +415,9 @@ struct Mesh {
 struct Collider {
     static constexpr std::string_view name{"Collider"};
 
+    // todo : should have a collision strategy
+
+    // todo : remove me
     enum class CollisionStep {
         NONE, // no collision at all
         AABB, // aabb colliding

@@ -27,7 +27,7 @@ target_link_libraries(
          CONAN_PKG::mp-units
          ImGuiFileDialog)
 target_include_directories(kawaii_engine PUBLIC include)
-target_compile_definitions(kawaii_engine PUBLIC MAGIC_ENUM_RANGE_MIN=0 MAGIC_ENUM_RANGE_MAX=512)
+target_compile_definitions(kawaii_engine PUBLIC MAGIC_ENUM_RANGE_MIN=0 MAGIC_ENUM_RANGE_MAX=512 GLM_CONFIG_XYZW_ONLY)
 
 install(TARGETS kawaii_engine DESTINATION lib)
 
