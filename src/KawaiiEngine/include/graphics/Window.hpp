@@ -10,8 +10,6 @@
 #include <string_view>
 #include <glm/vec2.hpp>
 
-// #include "EventProvider.hpp"
-
 namespace kawe {
 
 class EventProvider;

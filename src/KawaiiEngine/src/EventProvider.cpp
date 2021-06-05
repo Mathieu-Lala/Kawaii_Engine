@@ -19,27 +19,18 @@ auto kawe::EventProvider::assign(const Window &window) -> void
     ::glfwSetCursorPosCallback(window.get(), callback_eventMouseMoved);
     ::glfwSetCharCallback(window.get(), callback_char);
 
-    /// todo : ImGui_ImplGlfw_ScrollCallback
-    /// glfwSetScrollCallback(window, scroll_callback);
-    /// void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+    // todo : ImGui_ImplGlfw_ScrollCallback
+    // glfwSetScrollCallback(window, scroll_callback);
+    // void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 
-    m_buffer_events.emplace_back(OpenWindow{});
-    m_events_processed.emplace_back(TimeElapsed{});
-
-
-    // // Prepare window
+    // glfwSetJoystickCallback(joystick_configuration_change_handler);
     // glfwSetFramebufferSizeCallback(window, framebuffer_size_handler);
     // glfwSetWindowIconifyCallback(window, window_iconify_handler);
     // glfwSetWindowFocusCallback(window, window_focus_handler);
     // glfwSetErrorCallback(error_handler);
-    //
-    // // Set input callbacks
-    //  (window, keyboard_han  dler);
-    // glfwSetCharCallback(window, char_input_handler);
-    // glfwSetMouseButtonCallback(window, mouse_button_handler);
-    // glfwSetCursorPosCallback(window, mouse_move_handler);
-    // glfwSetScrollCallback(window, mouse_scroll_handler);
-    // glfwSetJoystickCallback(joystick_configuration_change_handler);
+
+    m_buffer_events.emplace_back(OpenWindow{});
+    m_events_processed.emplace_back(TimeElapsed{});
 }
 
 auto kawe::EventProvider::getNextEvent() -> Event
