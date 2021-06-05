@@ -121,7 +121,7 @@ struct Render {
             CALL_OPEN_GL(::glDeleteVertexArrays(1, &vao.object));
         }
 
-        enum class Attribute { POSITION, COLOR, NORMALS };
+        enum class Attribute { POSITION, COLOR, TEXTURE_2D, NORMALS };
     };
 
     template<VAO::Attribute A>
@@ -392,10 +392,6 @@ struct Mesh {
 
         Mesh mesh{filepath, std::filesystem::path(filepath).filename(), false};
 
-        spdlog::info(mesh.filepath);
-        spdlog::info(mesh.model_name);
-        spdlog::info(mesh.loaded_successfully);
-
         if (!model) return world.emplace<Mesh>(entity, mesh);
 
         const Render::VAO *vao{nullptr};
@@ -403,11 +399,63 @@ struct Mesh {
 
         // TODO: support normals & texcoords.
         kawe::Render::VBO<kawe::Render::VAO::Attribute::POSITION>::emplace(world, entity, model->vertices, 3);
+        kawe::Render::VBO<kawe::Render::VAO::Attribute::TEXTURE_2D>::emplace(world, entity, model->texcoords, 2);
         kawe::Render::EBO::emplace(world, entity, model->indices);
 
         mesh.loaded_successfully = true;
 
         return world.emplace_or_replace<Mesh>(entity, mesh);
+    }
+};
+
+struct Texture2D {
+    static constexpr std::string_view name{"Texture2D"};
+
+    std::string filepath;
+    std::uint32_t textureID;
+    std::shared_ptr<Texture> ref_resource;
+
+    static const Texture2D empty;
+
+    static auto
+        emplace(entt::registry &world, entt::entity e, ResourceLoader &loader, const std::string &filepath)
+            -> Texture2D
+    {
+        Texture2D texture{filepath, 0u, loader.load<Texture>(filepath)};
+
+        if (!texture.ref_resource) {
+            texture.ref_resource = std::make_shared<Texture>();
+            return world.emplace_or_replace<Texture2D>(e, texture);
+        }
+
+        CALL_OPEN_GL(::glGenTextures(1, &texture.textureID));
+        CALL_OPEN_GL(::glBindTexture(GL_TEXTURE_2D, texture.textureID));
+
+        CALL_OPEN_GL(::glTexStorage2D(
+            GL_TEXTURE_2D, 1, GL_RGBA8, texture.ref_resource->width, texture.ref_resource->height));
+        CALL_OPEN_GL(::glTexSubImage2D(
+            GL_TEXTURE_2D,
+            0,
+            0,
+            0,
+            texture.ref_resource->width,
+            texture.ref_resource->height,
+            GL_RGBA,
+            GL_UNSIGNED_BYTE,
+            texture.ref_resource->data));
+        CALL_OPEN_GL(::glGenerateMipmap(GL_TEXTURE_2D));
+
+
+        // CALL_OPEN_GL(::glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)); // GL_MIRRORED_REPEAT
+        // CALL_OPEN_GL(::glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)); // GL_MIRRORED_REPEAT
+
+        // CALL_OPEN_GL(::glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR));
+        // CALL_OPEN_GL(::glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
+
+
+        CALL_OPEN_GL(::glBindTexture(GL_TEXTURE_2D, 0));
+
+        return world.emplace_or_replace<Texture2D>(e, texture);
     }
 };
 
@@ -444,6 +492,7 @@ using Component = std::variant<
     Render::EBO,
     Render::VBO<Render::VAO::Attribute::POSITION>,
     Render::VBO<Render::VAO::Attribute::COLOR>,
+    Render::VBO<Render::VAO::Attribute::TEXTURE_2D>,
     // transform
     Position3f,
     Rotation3f,

@@ -49,7 +49,8 @@ namespace kawe {
 CREATE_LOADER_CLASS(
     Texture, auto load(const std::string &filepath)->std::shared_ptr<Texture> {
         int width, height, channels;
-        auto data = stbi_load(filepath.c_str(), &width, &height, &channels, 0);
+        spdlog::error("path is '{}'.", filepath);
+        auto data = stbi_load(filepath.data(), &width, &height, &channels, STBI_rgb_alpha);
         if (!data) {
             spdlog::error("couldn't load texture at '{}'.", filepath);
             return nullptr;
@@ -113,7 +114,8 @@ CREATE_LOADER_CLASS(
                     model->vertices.push_back(position.z);
 
                     model->normals.push_back(normal);
-                    model->texcoords.push_back(texcoord);
+                    model->texcoords.push_back(texcoord.x);
+                    model->texcoords.push_back(texcoord.y);
                 }
 
                 model->indices.push_back(uniqueVertices[position]);
@@ -121,8 +123,7 @@ CREATE_LOADER_CLASS(
         }
 
         return model;
-    }
-)
+    })
 
 // creates a texture loader.
 CREATE_LOADER_CLASS(
@@ -149,16 +150,14 @@ CREATE_LOADER_CLASS(
         std::ifstream shader_file{filepath};
 
         if (shader_file.is_open()) {
-            std::string shader_code {
-                (std::istreambuf_iterator<char>(shader_file)), (std::istreambuf_iterator<char>())
-            };
+            std::string shader_code{
+                (std::istreambuf_iterator<char>(shader_file)), (std::istreambuf_iterator<char>())};
 
             return std::make_shared<Shader>(shader_code.data(), new_shader_type_value);
         }
 
         return nullptr;
-    }
-)
+    })
 
 // global resource loader class that encapsulate all sub-loaders.
 class ResourceLoader {

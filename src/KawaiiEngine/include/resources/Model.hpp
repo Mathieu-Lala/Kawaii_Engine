@@ -5,11 +5,14 @@
 #include "tiny_obj_loader.h"
 
 namespace kawe {
+
 struct Model {
     std::vector<float> vertices;
     std::vector<glm::vec3> normals;
-    std::vector<glm::vec2> texcoords;
+    // std::vector<glm::vec2> texcoords;
+    std::vector<float> texcoords;
     std::vector<uint32_t> indices;
     std::string filepath;
 };
+
 } // namespace kawe
