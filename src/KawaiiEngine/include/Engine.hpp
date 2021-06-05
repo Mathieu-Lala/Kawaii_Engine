@@ -30,20 +30,16 @@ using namespace std::chrono_literals;
 
 namespace kawe {
 
-void GLAPIENTRY
-gl_message_callback(
-                [[ maybe_unused ]] GLenum source,
-                [[ maybe_unused ]] GLenum type,
-                [[ maybe_unused ]] GLuint id,
-                [[ maybe_unused ]] GLenum severity,
-                [[ maybe_unused ]] GLsizei length,
-                const GLchar* message,
-                [[ maybe_unused ]] const void* userParam)
+void GLAPIENTRY gl_message_callback(
+    [[maybe_unused]] GLenum source,
+    [[maybe_unused]] GLenum type,
+    [[maybe_unused]] GLuint id,
+    [[maybe_unused]] GLenum severity,
+    [[maybe_unused]] GLsizei length,
+    const GLchar *message,
+    [[maybe_unused]] const void *userParam)
 {
-    spdlog::error("GL CALLBACK: {} message = {}",
-        (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
-        message
-    );
+    spdlog::error("GL CALLBACK: {} message = {}", (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""), message);
 }
 
 class Engine {
@@ -70,7 +66,7 @@ public:
 
         spdlog::trace("[GLFW] Version: '{}'\n", glfwGetVersionString());
 
-        window = std::make_unique<Window>(events, "test", glm::ivec2{1080, 800});
+        window = std::make_unique<Window>(events, "test", glm::ivec2{1600, 900});
         glfwMakeContextCurrent(window->get());
 
         if (const auto err = glewInit(); err != GLEW_OK) {
@@ -117,6 +113,77 @@ public:
 
         world.on_construct<Render::VBO<Render::VAO::Attribute::POSITION>>().connect<update_aabb>();
         world.on_update<Render::VBO<Render::VAO::Attribute::POSITION>>().connect<update_aabb>();
+
+        // AABB alogrithm = really simple and fast collision detection
+        const auto check_collision = [](entt::registry &reg, entt::entity e) -> void {
+            const auto aabb = reg.get<AABB>(e);
+
+            bool has_aabb_collision = false;
+
+            for (const auto &other : reg.view<Collider, AABB>()) {
+                if (e == other) continue;
+                const auto other_aabb = reg.get<AABB>(other);
+
+                const auto collide = (aabb.min.x <= other_aabb.max.x && aabb.max.x >= other_aabb.min.x)
+                                     && (aabb.min.y <= other_aabb.max.y && aabb.max.y >= other_aabb.min.y)
+                                     && (aabb.min.z <= other_aabb.max.z && aabb.max.z >= other_aabb.min.z);
+                has_aabb_collision |= collide;
+
+                if (collide) {
+                    reg.patch<Collider>(e, [](auto &c) { c.step = Collider::CollisionStep::AABB; });
+                    reg.patch<Collider>(other, [](auto &c) { c.step = Collider::CollisionStep::AABB; });
+
+                    {
+                        // todo : this should be wrapped in a helper function ?
+                        const auto &vbo_color = reg.get<Render::VBO<Render::VAO::Attribute::COLOR>>(aabb.guizmo);
+                        std::vector<float> color_red{};
+                        for (auto i = 0ul; i != vbo_color.vertices.size(); i += vbo_color.stride_size) {
+                            color_red.emplace_back(1.0f); // r
+                            color_red.emplace_back(0.0f); // g
+                            color_red.emplace_back(0.0f); // b
+                            color_red.emplace_back(1.0f); // a
+                        }
+                        Render::VBO<Render::VAO::Attribute::COLOR>::emplace(reg, aabb.guizmo, color_red, 4);
+                    }
+
+                    {
+                        // todo : this should be wrapped in a helper function ?
+                        const auto &vbo_color =
+                            reg.get<Render::VBO<Render::VAO::Attribute::COLOR>>(other_aabb.guizmo);
+                        std::vector<float> color_red{};
+                        for (auto i = 0ul; i != vbo_color.vertices.size(); i += vbo_color.stride_size) {
+                            color_red.emplace_back(1.0f); // r
+                            color_red.emplace_back(0.0f); // g
+                            color_red.emplace_back(0.0f); // b
+                            color_red.emplace_back(1.0f); // a
+                        }
+                        Render::VBO<Render::VAO::Attribute::COLOR>::emplace(reg, other_aabb.guizmo, color_red, 4);
+                    }
+                }
+            }
+
+            // todo : this logic should be done on another signal named on_collision_resolved ...
+            const auto collider = reg.get<Collider>(e);
+            if (!has_aabb_collision) {
+                if (collider.step != Collider::CollisionStep::NONE) {
+                    reg.patch<Collider>(e, [](auto &c) { c.step = Collider::CollisionStep::NONE; });
+
+                    // todo : this should be wrapped in a helper function ?
+                    const auto &vbo_color = reg.get<Render::VBO<Render::VAO::Attribute::COLOR>>(aabb.guizmo);
+                    std::vector<float> color_black{};
+                    for (auto i = 0ul; i != vbo_color.vertices.size(); i += vbo_color.stride_size) {
+                        color_black.emplace_back(0.0f); // r
+                        color_black.emplace_back(0.0f); // g
+                        color_black.emplace_back(0.0f); // b
+                        color_black.emplace_back(1.0f); // a
+                    }
+                    Render::VBO<Render::VAO::Attribute::COLOR>::emplace(reg, aabb.guizmo, color_black, 4);
+                }
+            }
+        };
+
+        world.on_construct<AABB>().connect<check_collision>();
+        world.on_update<AABB>().connect<check_collision>();
 
         world.set<entt::dispatcher *>(&dispatcher);
         world.set<ResourceLoader *>(&loader);
@@ -260,56 +327,6 @@ private:
             });
         }
 
-        // todo : call this not every frame but only when the AABB changed
-        // AABB alogrithm = really simple and fast collision detection
-        for (const auto &entity1 : world.view<Collider, AABB>()) {
-            const auto aabb1 = world.get<AABB>(entity1);
-            const auto collider1 = world.get<Collider>(entity1);
-
-            bool has_aabb_collision = false;
-
-            for (const auto &entity2 : world.view<Collider, AABB>()) {
-                if (entity1 == entity2) continue;
-                const auto aabb2 = world.get<AABB>(entity2);
-
-                has_aabb_collision |= (aabb1.min.x <= aabb2.max.x && aabb1.max.x >= aabb2.min.x)
-                                      && (aabb1.min.y <= aabb2.max.y && aabb1.max.y >= aabb2.min.y)
-                                      && (aabb1.min.z <= aabb2.max.z && aabb1.max.z >= aabb2.min.z);
-            }
-
-            if (has_aabb_collision) {
-                world.patch<Collider>(
-                    entity1, [](auto &collider) { collider.step = Collider::CollisionStep::AABB; });
-
-                // todo : this should be wrapped in a helper function ?
-                const auto &vbo_color = world.get<Render::VBO<Render::VAO::Attribute::COLOR>>(aabb1.guizmo);
-                std::vector<float> color_red{};
-                for (auto i = 0ul; i != vbo_color.vertices.size(); i += vbo_color.stride_size) {
-                    color_red.emplace_back(1.0f); // r
-                    color_red.emplace_back(0.0f); // g
-                    color_red.emplace_back(0.0f); // b
-                    color_red.emplace_back(1.0f); // a
-                }
-                Render::VBO<Render::VAO::Attribute::COLOR>::emplace(world, aabb1.guizmo, color_red, 4);
-            } else {
-                if (collider1.step != Collider::CollisionStep::NONE) {
-                    world.patch<Collider>(
-                        entity1, [](auto &collider) { collider.step = Collider::CollisionStep::NONE; });
-
-                    // todo : this should be wrapped in a helper function ?
-                    const auto &vbo_color = world.get<Render::VBO<Render::VAO::Attribute::COLOR>>(aabb1.guizmo);
-                    std::vector<float> color_black{};
-                    for (auto i = 0ul; i != vbo_color.vertices.size(); i += vbo_color.stride_size) {
-                        color_black.emplace_back(0.0f); // r
-                        color_black.emplace_back(0.0f); // g
-                        color_black.emplace_back(0.0f); // b
-                        color_black.emplace_back(1.0f); // a
-                    }
-                    Render::VBO<Render::VAO::Attribute::COLOR>::emplace(world, aabb1.guizmo, color_black, 4);
-                }
-            }
-        }
-
         dispatcher.trigger<kawe::TimeElapsed>(e);
 
         ImGui_ImplOpenGL3_NewFrame();
@@ -325,9 +342,7 @@ private:
 
         ImGui::Render();
 
-        constexpr auto CLEAR_COLOR = glm::vec4{0.0f, 1.0f, 0.2f, 1.0f};
-
-        glClearColor(CLEAR_COLOR.r, CLEAR_COLOR.g, CLEAR_COLOR.b, CLEAR_COLOR.a);
+        glClearColor(state->clear_color.r, state->clear_color.g, state->clear_color.b, state->clear_color.a);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         for (auto &i : state->camera) { system_rendering(i, state->default_shader_program); }

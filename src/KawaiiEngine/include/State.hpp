@@ -21,18 +21,18 @@ struct State {
         default_frag_shader = loader.load<Shader>("./asset/shader/default.frag");
 
         if (!default_vert_shader || !default_frag_shader) {
-            spdlog::error("Failed initializing engine: couldn't load 'default.vert' or 'default.frag' shaders.");
+            spdlog::error("Failed initializing engine: couldn't load 'default.vert' or 'default.frag' "
+                          "shaders.");
             return;
         }
 
         default_shader_program = std::make_unique<ShaderProgram>(
-            std::vector<uint32_t> { default_vert_shader->shader_id, default_frag_shader->shader_id }
-        );
+            std::vector<uint32_t>{default_vert_shader->shader_id, default_frag_shader->shader_id});
 
         default_shader_program->use();
 
-        camera.emplace_back(window, glm::vec3{5.0f, 5.0f, 5.0f}, Rect4<float>{0.0f, 0.0f, 0.5f, 1.0f});
-        camera.emplace_back(window, glm::vec3{5.0f, 5.0f, 5.0f}, Rect4<float>{0.5f, 0.0f, 0.5f, 1.0f});
+        camera.emplace_back(window, glm::vec3{5.0f, 5.0f, 5.0f}, Rect4<float>{0.0f, 0.0f, 1.0f, 1.0f});
+        camera.emplace_back(window, glm::vec3{10.0f, 10.0f, 10.0f}, Rect4<float>{0.0f, 0.8f, 0.2f, 0.2f});
 
         for (const auto &i : magic_enum::enum_values<MouseButton::Button>()) {
             state_mouse_button[i] = false;
@@ -47,6 +47,8 @@ struct State {
 
     // cameras.
     std::vector<Camera> camera;
+
+    glm::vec4 clear_color{0.0f, 1.0f, 0.2f, 1.0f};
 
     // inputs.
     glm::dvec2 mouse_pos{};
