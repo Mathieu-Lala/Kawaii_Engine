@@ -2,6 +2,8 @@
 
 #include <entt/entt.hpp>
 #include <spdlog/spdlog.h>
+#include <filesystem>
+#include <fstream>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp>
@@ -9,6 +11,7 @@
 #include <stb_image.h>
 
 // data structures.
+#include "graphics/Shader.hpp"
 #include "Texture.hpp"
 #include "Model.hpp"
 
@@ -117,23 +120,55 @@ CREATE_LOADER_CLASS(
             }
         }
 
-        model->filepath = filepath;
-
-        spdlog::info("model at '{}' loaded successfully.", filepath);
         return model;
-    })
+    }
+)
+
+// creates a texture loader.
+CREATE_LOADER_CLASS(
+    Shader, auto load(const std::string &filepath)->std::shared_ptr<Shader> {
+        auto extension = std::filesystem::path(filepath).extension();
+
+        ShaderType new_shader_type{ShaderType::UNKNOWN};
+        std::uint32_t new_shader_type_value = 0;
+
+        // searching for the correct shader type using the file's extension.
+        for (const auto &[stype, svalue] : SHADER_TYPES)
+            if (extension.string() == fmt::format(".{}", magic_enum::enum_name(stype))) {
+                new_shader_type = stype;
+                new_shader_type_value = svalue;
+                break;
+            }
+
+        if (new_shader_type == ShaderType::UNKNOWN) {
+            spdlog::warn("failed to load shader at '{}': unknown format.", filepath);
+            return nullptr;
+        }
+
+        // reading source code.
+        std::ifstream shader_file{filepath};
+
+        if (shader_file.is_open()) {
+            std::string shader_code {
+                (std::istreambuf_iterator<char>(shader_file)), (std::istreambuf_iterator<char>())
+            };
+
+            return std::make_shared<Shader>(shader_code.data(), new_shader_type_value);
+        }
+
+        return nullptr;
+    }
+)
 
 // global resource loader class that encapsulate all sub-loaders.
 class ResourceLoader {
 public:
-    ResourceLoader() = default;
-    ~ResourceLoader() = default;
-
     template<typename T>
     auto load([[maybe_unused]] const std::string &filepath) -> std::shared_ptr<T>;
 
 private:
     CREATE_LOADER_INSTANCE(Texture)
+    CREATE_LOADER_INSTANCE(Shader)
     CREATE_LOADER_INSTANCE(Model)
 };
 } // namespace kawe

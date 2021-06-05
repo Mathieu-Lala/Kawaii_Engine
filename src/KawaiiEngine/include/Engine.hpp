@@ -30,6 +30,22 @@ using namespace std::chrono_literals;
 
 namespace kawe {
 
+void GLAPIENTRY
+gl_message_callback(
+                [[ maybe_unused ]] GLenum source,
+                [[ maybe_unused ]] GLenum type,
+                [[ maybe_unused ]] GLuint id,
+                [[ maybe_unused ]] GLenum severity,
+                [[ maybe_unused ]] GLsizei length,
+                const GLchar* message,
+                [[ maybe_unused ]] const void* userParam)
+{
+    spdlog::error("GL CALLBACK: {} message = {}",
+        (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
+        message
+    );
+}
+
 class Engine {
 public:
     Engine() : entity_hierarchy{component_inspector.selected}
@@ -127,6 +143,17 @@ public:
         CALL_OPEN_GL(::glEnable(GL_DEPTH_TEST));
         CALL_OPEN_GL(::glEnable(GL_BLEND));
         CALL_OPEN_GL(::glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
+
+        glm::dvec2 mouse_pos{};
+        glm::dvec2 mouse_pos_when_pressed{};
+
+        std::unordered_map<MouseButton::Button, bool> state_mouse_button;
+        for (const auto &i : magic_enum::enum_values<MouseButton::Button>()) {
+            state_mouse_button[i] = false;
+        }
+
+        std::unordered_map<Key::Code, bool> keyboard_state;
+        for (const auto &i : magic_enum::enum_values<Key::Code>()) { keyboard_state[i] = false; }
 
         on_create(world);
 
@@ -303,7 +330,7 @@ private:
         glClearColor(CLEAR_COLOR.r, CLEAR_COLOR.g, CLEAR_COLOR.b, CLEAR_COLOR.a);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        for (auto &i : state->camera) { system_rendering(i, state->shader); }
+        for (auto &i : state->camera) { system_rendering(i, state->default_shader_program); }
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
@@ -311,7 +338,7 @@ private:
     }
 
     // todo : this should not take a shader as argument
-    auto system_rendering(Camera &camera, Shader &shader) -> void
+    auto system_rendering(Camera &camera, std::unique_ptr<ShaderProgram> &shader_program) -> void
     {
         // todo : when resizing the window, the object deform
         // this doesn t sound kind right ...
@@ -323,11 +350,11 @@ private:
             static_cast<GLsizei>(viewport.w * window_size.x),
             static_cast<GLsizei>(viewport.h * window_size.y));
 
-        shader.setUniform("view", camera.getView());
-        shader.setUniform("projection", camera.getProjection());
+        shader_program->setUniform("view", camera.getView());
+        shader_program->setUniform("projection", camera.getProjection());
 
         const auto render =
-            [&shader]<bool has_ebo>(
+            [&shader_program]<bool has_ebo>(
                 const Render::VAO &vao, const Position3f &pos, const Rotation3f &rot, const Scale3f &scale) {
                 auto model = glm::dmat4(1.0);
                 model = glm::translate(model, pos.component);
@@ -335,7 +362,7 @@ private:
                 model = glm::rotate(model, glm::radians(rot.component.y), glm::dvec3(0.0, 1.0, 0.0));
                 model = glm::rotate(model, glm::radians(rot.component.z), glm::dvec3(0.0, 0.0, 1.0));
                 model = glm::scale(model, scale.component);
-                shader.setUniform("model", model);
+                shader_program->setUniform("model", model);
 
                 CALL_OPEN_GL(::glBindVertexArray(vao.object));
                 if constexpr (has_ebo) {
