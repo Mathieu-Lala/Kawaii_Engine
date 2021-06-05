@@ -12,7 +12,10 @@ template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Position3f &position) const
     -> void
 {
-    float temp[3] = {position.component.x, position.component.y, position.component.z};
+    float temp[3] = {
+        static_cast<float>(position.component.x),
+        static_cast<float>(position.component.y),
+        static_cast<float>(position.component.z)};
     if (ImGui::InputFloat3("position", temp, "%.3f")) {
         world.patch<Position3f>(e, [&temp](auto &pos) {
             pos.component.x = temp[0];
@@ -26,7 +29,10 @@ template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Rotation3f &rotation) const
     -> void
 {
-    float temp[3] = {rotation.component.x, rotation.component.y, rotation.component.z};
+    float temp[3] = {
+        static_cast<float>(rotation.component.x),
+        static_cast<float>(rotation.component.y),
+        static_cast<float>(rotation.component.z)};
     if (ImGui::InputFloat3("rotation", temp, "%.3f")) {
         world.patch<Rotation3f>(e, [&temp](auto &rot) {
             rot.component.x = temp[0];
@@ -40,7 +46,10 @@ template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Scale3f &scale) const
     -> void
 {
-    float temp[3] = {scale.component.x, scale.component.y, scale.component.z};
+    float temp[3] = {
+        static_cast<float>(scale.component.x),
+        static_cast<float>(scale.component.y),
+        static_cast<float>(scale.component.z)};
     if (ImGui::InputFloat3("scale", temp, "%.3f")) {
         world.patch<Scale3f>(e, [&temp](auto &scl) {
             scl.component.x = temp[0];
@@ -54,7 +63,10 @@ template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Velocity3f &vel) const
     -> void
 {
-    float temp[3] = {vel.component.x, vel.component.y, vel.component.z};
+    float temp[3] = {
+        static_cast<float>(vel.component.x),
+        static_cast<float>(vel.component.y),
+        static_cast<float>(vel.component.z)};
     if (ImGui::InputFloat3("velocity", temp, "%.3f")) {
         world.patch<Velocity3f>(e, [&temp](auto &v) {
             v.component.x = temp[0];
@@ -68,7 +80,10 @@ template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Gravitable3f &gravity) const
     -> void
 {
-    float temp[3] = {gravity.component.x, gravity.component.y, gravity.component.z};
+    float temp[3] = {
+        static_cast<float>(gravity.component.x),
+        static_cast<float>(gravity.component.y),
+        static_cast<float>(gravity.component.z)};
     if (ImGui::InputFloat3("velocity", temp, "%.3f")) {
         world.patch<Gravitable3f>(e, [&temp](auto &grav) {
             grav.component.x = temp[0];
@@ -152,15 +167,71 @@ auto kawe::ComponentInspector::drawComponentTweaker(
 }
 
 template<>
-auto kawe::ComponentInspector::drawComponentTweaker(
-    [[ maybe_unused ]] entt::registry &world,
-    [[ maybe_unused ]] entt::entity e,
-    const Mesh &mesh) const
-        -> void
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Mesh &mesh) const
+    -> void
 {
     ImGui::Text("path: %s", mesh.filepath.c_str());
     ImGui::Text("model: %s", mesh.model_name.c_str());
     ImGui::Text("loaded successfully: %s", mesh.loaded_successfully ? "Yes" : "No");
+
+    ImGuiFileDialog::Instance()->SetExtentionInfos(".obj", ImVec4(1.0f, 1.0f, 0.0f, 0.9f));
+
+    if (ImGui::Button("From File"))
+        ImGuiFileDialog::Instance()->OpenDialog("kawe::Inspect::Mesh", "Choose File", ".obj", ".");
+
+    if (ImGuiFileDialog::Instance()->Display("kawe::Inspect::Mesh")) {
+        if (ImGuiFileDialog::Instance()->IsOk()) {
+            const auto path = ImGuiFileDialog::Instance()->GetFilePathName();
+
+            world.remove_if_exists<Render::VBO<Render::VAO::Attribute::POSITION>>(e);
+            world.remove_if_exists<Render::VBO<Render::VAO::Attribute::COLOR>>(e);
+            world.remove_if_exists<Render::VBO<Render::VAO::Attribute::NORMALS>>(e);
+            world.remove_if_exists<Render::EBO>(e);
+            world.remove_if_exists<Render::VAO>(e);
+
+            Mesh::emplace(world, e, path);
+        }
+
+        ImGuiFileDialog::Instance()->Close();
+    }
+}
+
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &, entt::entity, const AABB &aabb) const -> void
+{
+    ImGui::Text(fmt::format("min: {{.x: {}, .y: {}, .z: {}}}", aabb.min.x, aabb.min.y, aabb.min.z).data());
+    ImGui::Text(fmt::format("max: {{.x: {}, .y: {}, .z: {}}}", aabb.max.x, aabb.max.y, aabb.max.z).data());
+}
+
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &, entt::entity, const Collider &collider) const
+    -> void
+{
+    constexpr auto enum_name = magic_enum::enum_type_name<Collider::CollisionStep>();
+    ImGui::Text(fmt::format("{} = {}", enum_name.data(), magic_enum::enum_name(collider.step)).data());
+}
+
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity, const Parent &parent) const
+    -> void
+{
+    ImGui::Text(
+        "parent = '%s'",
+        world.valid(parent.component) ? world.get<Name>(parent.component).component.data() : "null");
+}
+
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity, const Children &children) const
+    -> void
+{
+    if (children.component.empty()) {
+        ImGui::Text("No children yet");
+    } else {
+        int it = 0;
+        for (const auto &i : children.component) {
+            ImGui::Text("children[%d] = '%s'", it++, world.get<Name>(i).component.data());
+        }
+    }
 }
 
 auto kawe::ComponentInspector::draw(entt::registry &world) -> void
@@ -182,12 +253,12 @@ auto kawe::ComponentInspector::draw(entt::registry &world) -> void
             [try_variant = [&world, this]<typename Variant>(entt::entity e) {
                 if (const auto component = world.try_get<Variant>(e); component != nullptr) {
                     if (ImGui::BeginTabItem(Variant::name.data())) {
-                        drawComponentTweaker(world, selected.value(), *component);
-                        // ImGui::SameLine();
                         if (ImGui::Button(fmt::format("Delete Component###{}", Variant::name).data())) {
                             spdlog::warn("Deleting component {} of {}", Variant::name, e);
                             world.remove<Variant>(e);
                         }
+                        ImGui::Separator();
+                        drawComponentTweaker(world, selected.value(), *component);
                         ImGui::EndTabItem();
                     }
                 }
@@ -216,6 +287,7 @@ auto kawe::ComponentInspector::draw(entt::registry &world) -> void
     }
     ImGui::EndChild();
     if (selected.has_value()) {
+        ImGui::Separator();
         if (ImGui::Button("Delete Entity")) {
             spdlog::warn("Deleting entity {}", selected.value());
             world.destroy(selected.value());
