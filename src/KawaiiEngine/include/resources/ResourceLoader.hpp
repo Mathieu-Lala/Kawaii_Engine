@@ -141,15 +141,20 @@ namespace kawe {
         auto load(const std::string &filepath) -> std::shared_ptr<Shader> {
 
             auto extension = std::filesystem::path(filepath).extension();
+
             ShaderType new_shader_type { ShaderType::UNKNOWN };
+            std::uint32_t new_shader_type_value = 0;
 
             // searching for the correct shader type using the file's extension.
-            for (const auto &[stype, _] : SHADER_TYPES)
-                if (extension == magic_enum::enum_name(stype))
+            for (const auto &[stype, svalue] : SHADER_TYPES)
+                if (extension.string() == fmt::format(".{}", magic_enum::enum_name(stype))) {
                     new_shader_type = stype;
+                    new_shader_type_value = svalue;
+                    break;
+                }
 
             if (new_shader_type == ShaderType::UNKNOWN) {
-                spdlog::warn("failed to loader shader at '{}': unknow format.", filepath);
+                spdlog::warn("failed to load shader at '{}': unknown format.", filepath);
                 return nullptr;
             }
 
@@ -162,7 +167,7 @@ namespace kawe {
                     (std::istreambuf_iterator<char>())
                 };
 
-                Shader shader { shader_code, new_shader_type };
+                return std::make_shared<Shader>(shader_code.data(), new_shader_type_value);
             }
 
             return nullptr;
@@ -172,9 +177,6 @@ namespace kawe {
     // global resource loader class that encapsulate all sub-loaders.
     class ResourceLoader {
     public:
-
-        ResourceLoader() = default;
-        ~ResourceLoader() = default;
 
         template<typename T>
         auto load([[maybe_unused]] const std::string &filepath) -> std::shared_ptr<T>;

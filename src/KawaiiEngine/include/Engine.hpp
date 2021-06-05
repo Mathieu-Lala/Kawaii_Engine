@@ -27,6 +27,22 @@ using namespace std::chrono_literals;
 
 namespace kawe {
 
+void GLAPIENTRY
+gl_message_callback(
+                [[ maybe_unused ]] GLenum source,
+                [[ maybe_unused ]] GLenum type,
+                [[ maybe_unused ]] GLuint id,
+                [[ maybe_unused ]] GLenum severity,
+                [[ maybe_unused ]] GLsizei length,
+                const GLchar* message,
+                [[ maybe_unused ]] const void* userParam)
+{
+    spdlog::error("GL CALLBACK: {} message = {}",
+        (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
+        message
+    );
+}
+
 class Engine {
 public:
     Engine() : entity_hierarchy{component_inspector.selected}
@@ -72,6 +88,11 @@ public:
 
         world.set<entt::dispatcher *>(&dispatcher);
         world.set<ResourceLoader *>(&loader);
+
+        // During init, enable debug output
+        glEnable(GL_DEBUG_OUTPUT);
+        glDebugMessageCallback(gl_message_callback, 0);
+
 #define SET_DESTRUCTOR(Type) world.on_destroy<Type>().connect<Type::on_destroy>()
         SET_DESTRUCTOR(Render::VAO);
         SET_DESTRUCTOR(Render::VBO<Render::VAO::Attribute::POSITION>);
@@ -100,11 +121,15 @@ public:
         CALL_OPEN_GL(::glEnable(GL_BLEND));
         CALL_OPEN_GL(::glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
 
-        // Shader shader(VERT_SH, FRAG_SH);
-        // shader.use();
+        auto vert = loader.load<Shader>("./asset/shader/simple.vert");
+        auto frag = loader.load<Shader>("./asset/shader/simple.frag");
+        ShaderProgram shader_program { {
+            vert->shader_id, frag->shader_id
+        } };
+
+        shader_program.use();
 
         Camera camera{*window, glm::vec3{5, 5, 5}};
-
 
         bool is_running = true;
 
@@ -176,14 +201,14 @@ public:
                                 }
                             }
                             if (camera.hasChanged<Camera::Matrix::VIEW>()) {
-                                // const auto view =
-                                //     glm::lookAt(camera.getPosition(), camera.getTargetCenter(), camera.getUp());
-                                // shader.setUniform("view", view);
+                                const auto view =
+                                    glm::lookAt(camera.getPosition(), camera.getTargetCenter(), camera.getUp());
+                                shader_program.setUniform("view", view);
                                 camera.setChangedFlag<Camera::Matrix::VIEW>(false);
                             }
                             if (camera.hasChanged<Camera::Matrix::PROJECTION>()) {
-                                // const auto projection = camera.getProjection();
-                                // shader.setUniform("projection", projection);
+                                const auto projection = camera.getProjection();
+                                shader_program.setUniform("projection", projection);
                                 camera.setChangedFlag<Camera::Matrix::PROJECTION>(false);
                             }
                         }
@@ -222,7 +247,7 @@ public:
                         glClearColor(CLEAR_COLOR.r, CLEAR_COLOR.g, CLEAR_COLOR.b, CLEAR_COLOR.a);
                         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-                        // system_rendering(shader);
+                        system_rendering(shader_program);
 
                         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
@@ -246,10 +271,10 @@ private:
     ComponentInspector component_inspector;
     EntityHierarchy entity_hierarchy;
 
-    auto system_rendering(Shader &shader) -> void
+    auto system_rendering(ShaderProgram &shader_program) -> void
     {
         const auto render =
-            [&shader]<bool has_ebo>(
+            [&shader_program]<bool has_ebo>(
                 const Render::VAO &vao, const Position3f &pos, const Rotation3f &rot, const Scale3f &scale) {
                 auto model = glm::mat4(1.0f);
                 model = glm::translate(model, pos.component);
@@ -257,7 +282,7 @@ private:
                 model = glm::rotate(model, glm::radians(rot.component.y), glm::vec3(0.0f, 1.0f, 0.0f));
                 model = glm::rotate(model, glm::radians(rot.component.z), glm::vec3(0.0f, 0.0f, 1.0f));
                 model = glm::scale(model, scale.component);
-                shader.setUniform("model", model);
+                shader_program.setUniform("model", model);
 
                 CALL_OPEN_GL(::glBindVertexArray(vao.object));
                 if constexpr (has_ebo) {
