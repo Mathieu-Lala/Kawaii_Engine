@@ -25,7 +25,6 @@
     class type##Loader : public entt::resource_loader<type##Loader, type> { \
     public:                                                                 \
         __VA_ARGS__                                                         \
-    private:                                                                \
         type##Cache _cache;                                                 \
     };
 
@@ -49,12 +48,14 @@ namespace kawe {
 CREATE_LOADER_CLASS(
     Texture, auto load(const std::string &filepath)->std::shared_ptr<Texture> {
         int width, height, channels;
-        auto data = stbi_load(filepath.c_str(), &width, &height, &channels, 0);
+        spdlog::error("path is '{}'.", filepath);
+        const auto data = stbi_load(filepath.data(), &width, &height, &channels, STBI_rgb_alpha);
         if (!data) {
             spdlog::error("couldn't load texture at '{}'.", filepath);
             return nullptr;
         }
-        return std::make_shared<Texture>(width, height, channels, data);
+        return std::shared_ptr<Texture>(
+            new Texture{width, height, channels, data}, [](Texture *obj) { ::stbi_image_free(obj->data); });
     })
 
 // creates a model loader.
@@ -113,7 +114,8 @@ CREATE_LOADER_CLASS(
                     model->vertices.push_back(position.z);
 
                     model->normals.push_back(normal);
-                    model->texcoords.push_back(texcoord);
+                    model->texcoords.push_back(texcoord.x);
+                    model->texcoords.push_back(texcoord.y);
                 }
 
                 model->indices.push_back(uniqueVertices[position]);
@@ -121,8 +123,7 @@ CREATE_LOADER_CLASS(
         }
 
         return model;
-    }
-)
+    })
 
 // creates a texture loader.
 CREATE_LOADER_CLASS(
@@ -148,23 +149,28 @@ CREATE_LOADER_CLASS(
         // reading source code.
         std::ifstream shader_file{filepath};
 
-        if (shader_file.is_open()) {
-            std::string shader_code {
-                (std::istreambuf_iterator<char>(shader_file)), (std::istreambuf_iterator<char>())
-            };
-
-            return std::make_shared<Shader>(shader_code.data(), new_shader_type_value);
+        if (!shader_file.is_open()) {
+            spdlog::error("Shader:: failed to open '{}', returning an empty object.", filepath);
+            return std::make_shared<Shader>("", new_shader_type_value);
         }
+        const std::string shader_code{
+            (std::istreambuf_iterator<char>(shader_file)), (std::istreambuf_iterator<char>())};
 
-        return nullptr;
-    }
-)
+        return std::make_shared<Shader>(shader_code.data(), new_shader_type_value);
+    })
 
 // global resource loader class that encapsulate all sub-loaders.
 class ResourceLoader {
 public:
     template<typename T>
     auto load([[maybe_unused]] const std::string &filepath) -> std::shared_ptr<T>;
+
+    ~ResourceLoader()
+    {
+        _TextureLoader._cache.clear();
+        _ShaderLoader._cache.clear();
+        _ModelLoader._cache.clear();
+    }
 
 private:
     CREATE_LOADER_INSTANCE(Texture)

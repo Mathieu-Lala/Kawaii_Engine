@@ -187,7 +187,7 @@ public:
 
         world.set<entt::dispatcher *>(&dispatcher);
         world.set<ResourceLoader *>(&loader);
-        state = std::make_unique<State>(*window);
+        state = std::make_unique<State>(world, *window);
         world.set<State *>(state.get());
     }
 
@@ -210,17 +210,6 @@ public:
         CALL_OPEN_GL(::glEnable(GL_DEPTH_TEST));
         CALL_OPEN_GL(::glEnable(GL_BLEND));
         CALL_OPEN_GL(::glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
-
-        glm::dvec2 mouse_pos{};
-        glm::dvec2 mouse_pos_when_pressed{};
-
-        std::unordered_map<MouseButton::Button, bool> state_mouse_button;
-        for (const auto &i : magic_enum::enum_values<MouseButton::Button>()) {
-            state_mouse_button[i] = false;
-        }
-
-        std::unordered_map<Key::Code, bool> keyboard_state;
-        for (const auto &i : magic_enum::enum_values<Key::Code>()) { keyboard_state[i] = false; }
 
         on_create(world);
 
@@ -345,15 +334,14 @@ private:
         glClearColor(state->clear_color.r, state->clear_color.g, state->clear_color.b, state->clear_color.a);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        for (auto &i : state->camera) { system_rendering(i, state->default_shader_program); }
+        for (auto &i : state->camera) { system_rendering(i); }
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         glfwSwapBuffers(window->get());
     }
 
-    // todo : this should not take a shader as argument
-    auto system_rendering(Camera &camera, std::unique_ptr<ShaderProgram> &shader_program) -> void
+    auto system_rendering(Camera &camera) -> void
     {
         // todo : when resizing the window, the object deform
         // this doesn t sound kind right ...
@@ -365,115 +353,236 @@ private:
             static_cast<GLsizei>(viewport.w * window_size.x),
             static_cast<GLsizei>(viewport.h * window_size.y));
 
-        shader_program->setUniform("view", camera.getView());
-        shader_program->setUniform("projection", camera.getProjection());
+        const auto render = [&camera]<bool has_ebo, bool has_texture>(
+                                const Render::VAO &vao,
+                                const Position3f &pos,
+                                const Rotation3f &rot,
+                                const Scale3f &scale,
+                                const Texture2D &texture) {
+            // note : note optimized at all !!! bad bad bad
+            // or is it ?
+            vao.shader_program->use();
+            vao.shader_program->setUniform("view", camera.getView());
+            vao.shader_program->setUniform("projection", camera.getProjection());
 
-        const auto render =
-            [&shader_program]<bool has_ebo>(
-                const Render::VAO &vao, const Position3f &pos, const Rotation3f &rot, const Scale3f &scale) {
-                auto model = glm::dmat4(1.0);
-                model = glm::translate(model, pos.component);
-                model = glm::rotate(model, glm::radians(rot.component.x), glm::dvec3(1.0, 0.0, 0.0));
-                model = glm::rotate(model, glm::radians(rot.component.y), glm::dvec3(0.0, 1.0, 0.0));
-                model = glm::rotate(model, glm::radians(rot.component.z), glm::dvec3(0.0, 0.0, 1.0));
-                model = glm::scale(model, scale.component);
-                shader_program->setUniform("model", model);
+            auto model = glm::dmat4(1.0);
+            model = glm::translate(model, pos.component);
+            model = glm::rotate(model, glm::radians(rot.component.x), glm::dvec3(1.0, 0.0, 0.0));
+            model = glm::rotate(model, glm::radians(rot.component.y), glm::dvec3(0.0, 1.0, 0.0));
+            model = glm::rotate(model, glm::radians(rot.component.z), glm::dvec3(0.0, 0.0, 1.0));
+            model = glm::scale(model, scale.component);
+            vao.shader_program->setUniform("model", model);
 
-                CALL_OPEN_GL(::glBindVertexArray(vao.object));
-                if constexpr (has_ebo) {
-                    CALL_OPEN_GL(::glDrawElements(static_cast<GLenum>(vao.mode), vao.count, GL_UNSIGNED_INT, 0));
-                } else {
-                    CALL_OPEN_GL(::glDrawArrays(static_cast<GLenum>(vao.mode), 0, vao.count));
-                }
-            };
+            if constexpr (has_texture) { glBindTexture(GL_TEXTURE_2D, texture.textureID); }
+
+            CALL_OPEN_GL(::glBindVertexArray(vao.object));
+            if constexpr (has_ebo) {
+                CALL_OPEN_GL(::glDrawElements(static_cast<GLenum>(vao.mode), vao.count, GL_UNSIGNED_INT, 0));
+            } else {
+                CALL_OPEN_GL(::glDrawArrays(static_cast<GLenum>(vao.mode), 0, vao.count));
+            }
+
+            if constexpr (has_texture) { glBindTexture(GL_TEXTURE_2D, 0); }
+        };
 
         // note : it should be a better way..
         // todo create a matrix of callback templated somthing something
 
+        // without texture
+
         // without ebo
 
-        world.view<Render::VAO>(entt::exclude<Render::EBO, Position3f, Rotation3f, Scale3f>)
+        world.view<Render::VAO>(entt::exclude<Render::EBO, Position3f, Rotation3f, Scale3f, Texture2D>)
             .each([&render](const auto &vao) {
-                render.operator()<false>(
-                    vao, {Position3f::default_value}, {Rotation3f::default_value}, {Scale3f::default_value});
+                render.operator()<false, false>(
+                    vao,
+                    {Position3f::default_value},
+                    {Rotation3f::default_value},
+                    {Scale3f::default_value},
+                    Texture2D::empty);
             });
 
-        world.view<Render::VAO, Position3f>(entt::exclude<Render::EBO, Rotation3f, Scale3f>)
+        world.view<Render::VAO, Position3f>(entt::exclude<Render::EBO, Rotation3f, Scale3f, Texture2D>)
             .each([&render](const auto &vao, const auto &pos) {
-                render.operator()<false>(vao, pos, {Rotation3f::default_value}, {Scale3f::default_value});
+                render.operator()<false, false>(
+                    vao, pos, {Rotation3f::default_value}, {Scale3f::default_value}, Texture2D::empty);
             });
 
-        world.view<Render::VAO, Rotation3f>(entt::exclude<Render::EBO, Position3f, Scale3f>)
+        world.view<Render::VAO, Rotation3f>(entt::exclude<Render::EBO, Position3f, Scale3f, Texture2D>)
             .each([&render](const auto &vao, const auto &rot) {
-                render.operator()<false>(vao, {Position3f::default_value}, rot, {Scale3f::default_value});
+                render.operator()<false, false>(
+                    vao, {Position3f::default_value}, rot, {Scale3f::default_value}, Texture2D::empty);
             });
 
-        world.view<Render::VAO, Scale3f>(entt::exclude<Render::EBO, Position3f, Rotation3f>)
+        world.view<Render::VAO, Scale3f>(entt::exclude<Render::EBO, Position3f, Rotation3f, Texture2D>)
             .each([&render](const auto &vao, const auto &scale) {
-                render.operator()<false>(vao, {Position3f::default_value}, {Rotation3f::default_value}, scale);
+                render.operator()<false, false>(
+                    vao, {Position3f::default_value}, {Rotation3f::default_value}, scale, Texture2D::empty);
             });
 
-        world.view<Render::VAO, Position3f, Scale3f>(entt::exclude<Render::EBO, Rotation3f>)
+        world.view<Render::VAO, Position3f, Scale3f>(entt::exclude<Render::EBO, Rotation3f, Texture2D>)
             .each([&render](const auto &vao, const auto &pos, const auto &scale) {
-                render.operator()<false>(vao, pos, {Rotation3f::default_value}, scale);
+                render.operator()<false, false>(vao, pos, {Rotation3f::default_value}, scale, Texture2D::empty);
             });
 
-        world.view<Render::VAO, Rotation3f, Scale3f>(entt::exclude<Render::EBO, Position3f>)
+        world.view<Render::VAO, Rotation3f, Scale3f>(entt::exclude<Render::EBO, Position3f, Texture2D>)
             .each([&render](const auto &vao, const auto &rot, const auto &scale) {
-                render.operator()<false>(vao, {Position3f::default_value}, rot, scale);
+                render.operator()<false, false>(vao, {Position3f::default_value}, rot, scale, Texture2D::empty);
             });
 
-        world.view<Render::VAO, Position3f, Rotation3f>(entt::exclude<Render::EBO, Scale3f>)
+        world.view<Render::VAO, Position3f, Rotation3f>(entt::exclude<Render::EBO, Scale3f, Texture2D>)
             .each([&render](const auto &vao, const auto &pos, const auto &rot) {
-                render.operator()<false>(vao, pos, rot, {Scale3f::default_value});
+                render.operator()<false, false>(vao, pos, rot, {Scale3f::default_value}, Texture2D::empty);
             });
 
-        world.view<Render::VAO, Position3f, Rotation3f, Scale3f>(entt::exclude<Render::EBO>)
+        world.view<Render::VAO, Position3f, Rotation3f, Scale3f>(entt::exclude<Render::EBO, Texture2D>)
             .each([&render](const auto &vao, const auto &pos, const auto &rot, const auto &scale) {
-                render.operator()<false>(vao, pos, rot, scale);
+                render.operator()<false, false>(vao, pos, rot, scale, Texture2D::empty);
             });
 
         // with ebo
 
-        world.view<Render::EBO, Render::VAO>(entt::exclude<Position3f, Rotation3f, Scale3f>)
+        world.view<Render::EBO, Render::VAO>(entt::exclude<Position3f, Rotation3f, Scale3f, Texture2D>)
             .each([&render](const auto &, const auto &vao) {
-                render.operator()<true>(
-                    vao, {Position3f::default_value}, {Rotation3f::default_value}, {Scale3f::default_value});
+                render.operator()<true, false>(
+                    vao,
+                    {Position3f::default_value},
+                    {Rotation3f::default_value},
+                    {Scale3f::default_value},
+                    Texture2D::empty);
             });
 
-        world.view<Render::EBO, Render::VAO, Position3f>(entt::exclude<Rotation3f, Scale3f>)
+        world.view<Render::EBO, Render::VAO, Position3f>(entt::exclude<Rotation3f, Scale3f, Texture2D>)
             .each([&render](const auto &, const auto &vao, const auto &pos) {
-                render.operator()<true>(vao, pos, {Rotation3f::default_value}, {Scale3f::default_value});
+                render.operator()<true, false>(
+                    vao, pos, {Rotation3f::default_value}, {Scale3f::default_value}, Texture2D::empty);
             });
 
-        world.view<Render::EBO, Render::VAO, Rotation3f>(entt::exclude<Position3f, Scale3f>)
+        world.view<Render::EBO, Render::VAO, Rotation3f>(entt::exclude<Position3f, Scale3f, Texture2D>)
             .each([&render](const auto &, const auto &vao, const auto &rot) {
-                render.operator()<true>(vao, {Position3f::default_value}, rot, {Scale3f::default_value});
+                render.operator()<true, false>(
+                    vao, {Position3f::default_value}, rot, {Scale3f::default_value}, Texture2D::empty);
             });
 
-        world.view<Render::EBO, Render::VAO, Scale3f>(entt::exclude<Position3f, Rotation3f>)
+        world.view<Render::EBO, Render::VAO, Scale3f>(entt::exclude<Position3f, Rotation3f, Texture2D>)
             .each([&render](const auto &, const auto &vao, const auto &scale) {
-                render.operator()<true>(vao, {Position3f::default_value}, {Rotation3f::default_value}, scale);
+                render.operator()<true, false>(
+                    vao, {Position3f::default_value}, {Rotation3f::default_value}, scale, Texture2D::empty);
             });
 
-        world.view<Render::EBO, Render::VAO, Position3f, Scale3f>(entt::exclude<Rotation3f>)
+        world.view<Render::EBO, Render::VAO, Position3f, Scale3f>(entt::exclude<Rotation3f, Texture2D>)
             .each([&render](const auto &, const auto &vao, const auto &pos, const auto &scale) {
-                render.operator()<true>(vao, pos, {Rotation3f::default_value}, scale);
+                render.operator()<true, false>(vao, pos, {Rotation3f::default_value}, scale, Texture2D::empty);
             });
 
-        world.view<Render::EBO, Render::VAO, Rotation3f, Scale3f>(entt::exclude<Position3f>)
+        world.view<Render::EBO, Render::VAO, Rotation3f, Scale3f>(entt::exclude<Position3f, Texture2D>)
             .each([&render](const auto &, const auto &vao, const auto &rot, const auto &scale) {
-                render.operator()<true>(vao, {Position3f::default_value}, rot, scale);
+                render.operator()<true, false>(vao, {Position3f::default_value}, rot, scale, Texture2D::empty);
             });
 
-        world.view<Render::EBO, Render::VAO, Position3f, Rotation3f>(entt::exclude<Scale3f>)
+        world.view<Render::EBO, Render::VAO, Position3f, Rotation3f>(entt::exclude<Scale3f, Texture2D>)
             .each([&render](const auto &, const auto &vao, const auto &pos, const auto &rot) {
-                render.operator()<true>(vao, pos, rot, {Scale3f::default_value});
+                render.operator()<true, false>(vao, pos, rot, {Scale3f::default_value}, Texture2D::empty);
             });
 
-        world.view<Render::EBO, Render::VAO, Position3f, Rotation3f, Scale3f>().each(
-            [&render](const auto &, const auto &vao, const auto &pos, const auto &rot, const auto &scale) {
-                render.operator()<true>(vao, pos, rot, scale);
+        world.view<Render::EBO, Render::VAO, Position3f, Rotation3f, Scale3f>(entt::exclude<Texture2D>)
+            .each([&render](const auto &, const auto &vao, const auto &pos, const auto &rot, const auto &scale) {
+                render.operator()<true, false>(vao, pos, rot, scale, Texture2D::empty);
+            });
+
+        // with texture
+
+        // without ebo
+
+        world.view<Render::VAO, Texture2D>(entt::exclude<Render::EBO, Position3f, Rotation3f, Scale3f>)
+            .each([&render](const auto &vao, const auto &texture) {
+                render.operator()<false, true>(
+                    vao, {Position3f::default_value}, {Rotation3f::default_value}, {Scale3f::default_value}, texture);
+            });
+
+        world.view<Render::VAO, Position3f, Texture2D>(entt::exclude<Render::EBO, Rotation3f, Scale3f>)
+            .each([&render](const auto &vao, const auto &pos, const auto &texture) {
+                render.operator()<false, true>(
+                    vao, pos, {Rotation3f::default_value}, {Scale3f::default_value}, texture);
+            });
+
+        world.view<Render::VAO, Rotation3f, Texture2D>(entt::exclude<Render::EBO, Position3f, Scale3f>)
+            .each([&render](const auto &vao, const auto &rot, const auto &texture) {
+                render.operator()<false, true>(
+                    vao, {Position3f::default_value}, rot, {Scale3f::default_value}, texture);
+            });
+
+        world.view<Render::VAO, Scale3f, Texture2D>(entt::exclude<Render::EBO, Position3f, Rotation3f>)
+            .each([&render](const auto &vao, const auto &scale, const auto &texture) {
+                render.operator()<false, true>(
+                    vao, {Position3f::default_value}, {Rotation3f::default_value}, scale, texture);
+            });
+
+        world.view<Render::VAO, Position3f, Scale3f, Texture2D>(entt::exclude<Render::EBO, Rotation3f>)
+            .each([&render](const auto &vao, const auto &pos, const auto &scale, const auto &texture) {
+                render.operator()<false, true>(vao, pos, {Rotation3f::default_value}, scale, texture);
+            });
+
+        world.view<Render::VAO, Rotation3f, Scale3f, Texture2D>(entt::exclude<Render::EBO, Position3f>)
+            .each([&render](const auto &vao, const auto &rot, const auto &scale, const auto &texture) {
+                render.operator()<false, true>(vao, {Position3f::default_value}, rot, scale, texture);
+            });
+
+        world.view<Render::VAO, Position3f, Rotation3f, Texture2D>(entt::exclude<Render::EBO, Scale3f>)
+            .each([&render](const auto &vao, const auto &pos, const auto &rot, const auto &texture) {
+                render.operator()<false, true>(vao, pos, rot, {Scale3f::default_value}, texture);
+            });
+
+        world.view<Render::VAO, Position3f, Rotation3f, Scale3f, Texture2D>(entt::exclude<Render::EBO>)
+            .each([&render](const auto &vao, const auto &pos, const auto &rot, const auto &scale, const auto &texture) {
+                render.operator()<false, true>(vao, pos, rot, scale, texture);
+            });
+
+        // with ebo
+
+        world.view<Render::EBO, Render::VAO, Texture2D>(entt::exclude<Position3f, Rotation3f, Scale3f>)
+            .each([&render](const auto &, const auto &vao, const auto &texture) {
+                render.operator()<true, true>(
+                    vao, {Position3f::default_value}, {Rotation3f::default_value}, {Scale3f::default_value}, texture);
+            });
+
+        world.view<Render::EBO, Render::VAO, Position3f, Texture2D>(entt::exclude<Rotation3f, Scale3f>)
+            .each([&render](const auto &, const auto &vao, const auto &pos, const auto &texture) {
+                render.operator()<true, true>(
+                    vao, pos, {Rotation3f::default_value}, {Scale3f::default_value}, texture);
+            });
+
+        world.view<Render::EBO, Render::VAO, Rotation3f, Texture2D>(entt::exclude<Position3f, Scale3f>)
+            .each([&render](const auto &, const auto &vao, const auto &rot, const auto &texture) {
+                render.operator()<true, true>(
+                    vao, {Position3f::default_value}, rot, {Scale3f::default_value}, texture);
+            });
+
+        world.view<Render::EBO, Render::VAO, Scale3f, Texture2D>(entt::exclude<Position3f, Rotation3f>)
+            .each([&render](const auto &, const auto &vao, const auto &scale, const auto &texture) {
+                render.operator()<true, true>(
+                    vao, {Position3f::default_value}, {Rotation3f::default_value}, scale, texture);
+            });
+
+        world.view<Render::EBO, Render::VAO, Position3f, Scale3f, Texture2D>(entt::exclude<Rotation3f>)
+            .each([&render](const auto &, const auto &vao, const auto &pos, const auto &scale, const auto &texture) {
+                render.operator()<true, true>(vao, pos, {Rotation3f::default_value}, scale, texture);
+            });
+
+        world.view<Render::EBO, Render::VAO, Rotation3f, Scale3f, Texture2D>(entt::exclude<Position3f>)
+            .each([&render](const auto &, const auto &vao, const auto &rot, const auto &scale, const auto &texture) {
+                render.operator()<true, true>(vao, {Position3f::default_value}, rot, scale, texture);
+            });
+
+        world.view<Render::EBO, Render::VAO, Position3f, Rotation3f, Texture2D>(entt::exclude<Scale3f>)
+            .each([&render](const auto &, const auto &vao, const auto &pos, const auto &rot, const auto &texture) {
+                render.operator()<true, true>(vao, pos, rot, {Scale3f::default_value}, texture);
+            });
+
+        world.view<Render::EBO, Render::VAO, Position3f, Rotation3f, Scale3f, Texture2D>().each(
+            [&render](
+                const auto &, const auto &vao, const auto &pos, const auto &rot, const auto &scale, const auto &texture) {
+                render.operator()<true, true>(vao, pos, rot, scale, texture);
             });
     }
 }; // namespace kawe

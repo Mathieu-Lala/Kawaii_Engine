@@ -9,7 +9,7 @@ target_link_libraries(ImGuiFileDialog PUBLIC project_options glfw_imgui_opengl3)
 target_include_directories(ImGuiFileDialog PUBLIC ../../dependencies/ImGuiFileDialog)
 
 add_library(kawaii_engine STATIC src/graphics/Window.cpp src/graphics/Shader.cpp src/EventProvider.cpp
-                                 src/widgets/ComponentInspector.cpp src/resources/ResourceLoader.cpp)
+                                 src/widgets/ComponentInspector.cpp src/resources/ResourceLoader.cpp src/Component.cpp)
 
 target_link_libraries(
   kawaii_engine

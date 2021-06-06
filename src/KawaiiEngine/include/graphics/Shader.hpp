@@ -12,21 +12,13 @@
 
 namespace kawe {
 
-enum class ShaderType {
-    vert,
-    frag,
-    UNKNOWN
-};
+enum class ShaderType { vert, frag, UNKNOWN };
 
 const std::unordered_map<ShaderType, std::uint32_t> SHADER_TYPES = {
-    { ShaderType::vert, GL_VERTEX_SHADER },
-    { ShaderType::frag, GL_FRAGMENT_SHADER },
-    { ShaderType::UNKNOWN, 0 }
-};
+    {ShaderType::vert, GL_VERTEX_SHADER}, {ShaderType::frag, GL_FRAGMENT_SHADER}, {ShaderType::UNKNOWN, 0}};
 
 struct Shader {
-    explicit Shader(const char *source, std::uint32_t type)
-        : shader_id { ::glCreateShader(type) }
+    explicit Shader(const char *source, std::uint32_t type) : shader_id{::glCreateShader(type)}
     {
         if (!shader_id) {
             SHOW_ERROR(::glGetError());
@@ -39,10 +31,7 @@ struct Shader {
         check_shader(shader_id);
     }
 
-    ~Shader()
-    {
-        CALL_OPEN_GL(::glDeleteShader(shader_id));
-    }
+    ~Shader() { CALL_OPEN_GL(::glDeleteShader(shader_id)); }
 
     static auto check_shader(std::uint32_t id) -> void
     {
@@ -63,16 +52,15 @@ struct Shader {
 
 class ShaderProgram {
 public:
-    ShaderProgram(const std::vector<std::uint32_t> &shader_ids)
-        : program_id { ::glCreateProgram() }
+    ShaderProgram(std::string name, const std::vector<std::uint32_t> &shader_ids) :
+        m_name{std::move(name)}, program_id{::glCreateProgram()}
     {
         if (!program_id) {
             SHOW_ERROR(::glGetError());
             return;
         }
 
-        for (const auto shader_id : shader_ids)
-            CALL_OPEN_GL(::glAttachShader(program_id, shader_id));
+        for (const auto shader_id : shader_ids) CALL_OPEN_GL(::glAttachShader(program_id, shader_id));
 
         CALL_OPEN_GL(::glLinkProgram(program_id));
         CALL_OPEN_GL(::glValidateProgram(program_id));
@@ -94,21 +82,19 @@ public:
         }
     }
 
-    ~ShaderProgram()
-    {
-        CALL_OPEN_GL(::glDeleteProgram(program_id));
-    }
+    ~ShaderProgram() { CALL_OPEN_GL(::glDeleteProgram(program_id)); }
 
-    auto use() const noexcept -> void
-    {
-        CALL_OPEN_GL(::glUseProgram(program_id));
-    }
+    auto use() const noexcept -> void { CALL_OPEN_GL(::glUseProgram(program_id)); }
 
     template<typename T>
     auto setUniform(const std::string_view, T) -> void;
 
+    auto getName() const noexcept -> const std::string & { return m_name; }
+
 private:
     ShaderProgram();
+
+    std::string m_name;
 
     std::uint32_t program_id;
 };

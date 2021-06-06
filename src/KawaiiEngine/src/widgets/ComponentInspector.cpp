@@ -111,13 +111,30 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt:
     constexpr auto enum_name = magic_enum::enum_type_name<Render::VAO::DisplayMode>();
     auto display_mode = vao.mode;
     if (ImGui::BeginCombo(
-            "##combo", fmt::format("{} = {}", enum_name.data(), magic_enum::enum_name(vao.mode)).data())) {
+            "##combo_vao_mode", fmt::format("{} = {}", enum_name.data(), magic_enum::enum_name(vao.mode)).data())) {
         for (const auto &i : Render::VAO::DISPLAY_MODES) {
             const auto is_selected = vao.mode == i;
             if (ImGui::Selectable(magic_enum::enum_name(i).data(), is_selected)) {
                 display_mode = i;
                 world.patch<Render::VAO>(
                     e, [&display_mode](Render::VAO &component) { component.mode = display_mode; });
+            }
+            if (is_selected) { ImGui::SetItemDefaultFocus(); }
+        }
+        ImGui::EndCombo();
+    }
+
+    ImGui::Separator();
+
+    kawe::ShaderProgram *shader_program = vao.shader_program;
+    if (ImGui::BeginCombo("##combo_vao_shader", fmt::format("shader = {}", vao.shader_program->getName()).data())) {
+        for (const auto &i : world.ctx<State *>()->shaders) {
+            const auto is_selected = vao.shader_program->getName() == i->getName();
+            if (ImGui::Selectable(i->getName().data(), is_selected)) {
+                shader_program = i.get();
+                world.patch<Render::VAO>(e, [&shader_program](Render::VAO &component) {
+                    component.shader_program = shader_program;
+                });
             }
             if (is_selected) { ImGui::SetItemDefaultFocus(); }
         }
