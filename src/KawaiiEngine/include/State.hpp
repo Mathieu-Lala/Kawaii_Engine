@@ -28,19 +28,8 @@ struct State {
         shaders.emplace_back(std::make_unique<ShaderProgram>(
             "texture_2D", std::vector<uint32_t>{texture_2D_vert->shader_id, texture_2D_frag->shader_id}));
 
-        // if (!default_vert_shader || !default_frag_shader) {
-        //     // todo : show this in the load
-        //     spdlog::error("Failed initializing engine: couldn't load 'default.vert' or 'default.frag' "
-        //                   "shaders.");
-        //     return;
-        // }
-
-
-        // default_shader_program->use();
-
-
-        camera.emplace_back(window, glm::vec3{5.0f, 5.0f, 5.0f}, Rect4<float>{0.0f, 0.0f, 1.0f, 1.0f});
         camera.emplace_back(window, glm::vec3{10.0f, 10.0f, 10.0f}, Rect4<float>{0.0f, 0.8f, 0.2f, 0.2f});
+        camera.emplace_back(window, glm::vec3{5.0f, 5.0f, 5.0f}, Rect4<float>{0.0f, 0.0f, 1.0f, 1.0f});
 
         for (const auto &i : magic_enum::enum_values<MouseButton::Button>()) {
             state_mouse_button[i] = false;
@@ -48,14 +37,8 @@ struct State {
         for (const auto &i : magic_enum::enum_values<Key::Code>()) { keyboard_state[i] = false; }
     }
 
-    // shaders.
-    // std::shared_ptr<Shader> default_vert_shader;
-    // std::shared_ptr<Shader> default_frag_shader;
-    // std::unique_ptr<ShaderProgram> default_shader_program;
-
     std::vector<std::unique_ptr<ShaderProgram>> shaders;
 
-    // cameras.
     std::vector<Camera> camera;
 
     glm::vec4 clear_color{0.0f, 1.0f, 0.2f, 1.0f};

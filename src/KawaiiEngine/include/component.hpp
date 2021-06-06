@@ -180,9 +180,7 @@ struct Render {
                 });
             }
 
-            if (const auto vbo = world.try_get<VBO<A>>(entity); vbo != nullptr) {
-                world.remove<VBO<A>>(entity);
-            }
+            world.remove_if_exists<VBO<A>>(entity);
             return world.emplace<VBO<A>>(entity, obj);
         }
 
@@ -209,6 +207,7 @@ struct Render {
         static constexpr std::string_view name{"EBO"};
 
         unsigned int object;
+        std::vector<std::uint32_t> indices;
 
         template<std::size_t S>
         static auto
@@ -228,20 +227,20 @@ struct Render {
             if (vao = world.try_get<VAO>(entity); !vao) { vao = &VAO::emplace(world, entity); }
             CALL_OPEN_GL(::glBindVertexArray(vao->object));
 
-            EBO obj{};
+            EBO obj{0u, std::move(indices)};
             CALL_OPEN_GL(::glGenBuffers(1, &obj.object));
 
             CALL_OPEN_GL(::glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, obj.object));
             CALL_OPEN_GL(::glBufferData(
                 GL_ELEMENT_ARRAY_BUFFER,
-                static_cast<GLsizei>(indices.size() * sizeof(uint32_t)),
-                indices.data(),
+                static_cast<GLsizei>(obj.indices.size() * sizeof(uint32_t)),
+                obj.indices.data(),
                 GL_STATIC_DRAW));
 
             world.patch<VAO>(
-                entity, [&indices](VAO &vao_obj) { vao_obj.count = static_cast<GLsizei>(indices.size()); });
+                entity, [&obj](VAO &vao_obj) { vao_obj.count = static_cast<GLsizei>(obj.indices.size()); });
 
-            return world.emplace_or_replace<EBO>(entity);
+            return world.emplace_or_replace<EBO>(entity, obj);
         }
 
         static auto on_destroy(entt::registry &world, const entt::entity &entity) -> void
@@ -399,25 +398,31 @@ struct Mesh {
 
     static auto emplace(entt::registry &world, const entt::entity &entity, const std::string &filepath) -> Mesh &
     {
-        auto loader = world.ctx<ResourceLoader *>();
-        auto model = loader->load<kawe::Model>(filepath);
+        const auto loader = world.ctx<ResourceLoader *>();
+        const auto model = loader->load<Model>(filepath);
 
-        Mesh mesh{filepath, std::filesystem::path(filepath).filename(), false};
-
-        if (!model) return world.emplace<Mesh>(entity, mesh);
+        if (!model) {
+            // error
+            return world.emplace<Mesh>(entity, filepath, std::filesystem::path(filepath).filename(), false);
+        }
 
         const Render::VAO *vao{nullptr};
         if (vao = world.try_get<Render::VAO>(entity); !vao) { vao = &Render::VAO::emplace(world, entity); }
 
-        // TODO: support normals & texcoords.
-        kawe::Render::VBO<kawe::Render::VAO::Attribute::POSITION>::emplace(world, entity, model->vertices, 3);
-        kawe::Render::VBO<kawe::Render::VAO::Attribute::TEXTURE_2D>::emplace(world, entity, model->texcoords, 2);
-        kawe::Render::EBO::emplace(world, entity, model->indices);
+        Render::VBO<Render::VAO::Attribute::POSITION>::emplace(world, entity, model->vertices, 3);
+        Render::VBO<Render::VAO::Attribute::TEXTURE_2D>::emplace(world, entity, model->texcoords, 2);
+        Render::VBO<Render::VAO::Attribute::NORMALS>::emplace(world, entity, model->normals, 3);
+        Render::EBO::emplace(world, entity, model->indices);
 
-        mesh.loaded_successfully = true;
-
-        return world.emplace_or_replace<Mesh>(entity, mesh);
+        return world.emplace_or_replace<Mesh>(entity, filepath, std::filesystem::path(filepath).filename(), true);
     }
+};
+
+struct FillColor {
+    static constexpr std::string_view name{"Fill Color"};
+
+    // normalized value 0..1
+    glm::vec4 component{1.0f, 1.0f, 1.0f, 1.0f};
 };
 
 struct Texture2D {
@@ -500,11 +505,13 @@ using Component = std::variant<
     Children,
     // rendering
     Mesh,
+    FillColor,
     Render::VAO,
     Render::EBO,
     Render::VBO<Render::VAO::Attribute::POSITION>,
     Render::VBO<Render::VAO::Attribute::COLOR>,
     Render::VBO<Render::VAO::Attribute::TEXTURE_2D>,
+    Render::VBO<Render::VAO::Attribute::NORMALS>,
     // transform
     Position3f,
     Rotation3f,
