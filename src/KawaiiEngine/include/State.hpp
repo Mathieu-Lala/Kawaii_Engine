@@ -13,23 +13,31 @@
 namespace kawe {
 
 struct State {
-    State(const Window &window)
+    State(entt::registry &world, const Window &window)
     {
-        ResourceLoader loader;
+        const auto default_vert = world.ctx<ResourceLoader *>()->load<Shader>("./asset/shader/default.vert");
+        const auto default_frag = world.ctx<ResourceLoader *>()->load<Shader>("./asset/shader/default.frag");
+        shaders.emplace_back(std::make_unique<ShaderProgram>(
+            "default", std::vector<uint32_t>{default_vert->shader_id, default_frag->shader_id}));
 
-        default_vert_shader = loader.load<Shader>("./asset/shader/default.vert");
-        default_frag_shader = loader.load<Shader>("./asset/shader/default.frag");
+        const auto texture_2D_frag =
+            world.ctx<ResourceLoader *>()->load<Shader>("./asset/shader/texture_2D.vert");
+        const auto texture_2D_vert =
+            world.ctx<ResourceLoader *>()->load<Shader>("./asset/shader/texture_2D.frag");
 
-        if (!default_vert_shader || !default_frag_shader) {
-            spdlog::error("Failed initializing engine: couldn't load 'default.vert' or 'default.frag' "
-                          "shaders.");
-            return;
-        }
+        shaders.emplace_back(std::make_unique<ShaderProgram>(
+            "texture_2D", std::vector<uint32_t>{texture_2D_vert->shader_id, texture_2D_frag->shader_id}));
 
-        default_shader_program = std::make_unique<ShaderProgram>(
-            std::vector<uint32_t>{default_vert_shader->shader_id, default_frag_shader->shader_id});
+        // if (!default_vert_shader || !default_frag_shader) {
+        //     // todo : show this in the load
+        //     spdlog::error("Failed initializing engine: couldn't load 'default.vert' or 'default.frag' "
+        //                   "shaders.");
+        //     return;
+        // }
 
-        default_shader_program->use();
+
+        // default_shader_program->use();
+
 
         camera.emplace_back(window, glm::vec3{5.0f, 5.0f, 5.0f}, Rect4<float>{0.0f, 0.0f, 1.0f, 1.0f});
         camera.emplace_back(window, glm::vec3{10.0f, 10.0f, 10.0f}, Rect4<float>{0.0f, 0.8f, 0.2f, 0.2f});
@@ -41,9 +49,11 @@ struct State {
     }
 
     // shaders.
-    std::shared_ptr<Shader> default_vert_shader;
-    std::shared_ptr<Shader> default_frag_shader;
-    std::unique_ptr<ShaderProgram> default_shader_program;
+    // std::shared_ptr<Shader> default_vert_shader;
+    // std::shared_ptr<Shader> default_frag_shader;
+    // std::unique_ptr<ShaderProgram> default_shader_program;
+
+    std::vector<std::unique_ptr<ShaderProgram>> shaders;
 
     // cameras.
     std::vector<Camera> camera;

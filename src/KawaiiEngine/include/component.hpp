@@ -103,13 +103,14 @@ struct Render {
         unsigned int object;
         DisplayMode mode;
         GLsizei count;
+        ShaderProgram *shader_program;
 
         static constexpr DisplayMode DEFAULT_MODE{DisplayMode::TRIANGLES};
 
         static auto emplace(entt::registry &world, const entt::entity &entity) -> VAO &
         {
             spdlog::trace("engine::core::VAO: emplace to {}", entity);
-            VAO obj{0u, DEFAULT_MODE, 0};
+            VAO obj{0u, DEFAULT_MODE, 0, world.ctx<State *>()->shaders[0].get()};
             CALL_OPEN_GL(::glGenVertexArrays(1, &obj.object));
             return world.emplace<VAO>(entity, obj);
         }
@@ -142,6 +143,17 @@ struct Render {
 
             const VAO *vao{nullptr};
             if (vao = world.try_get<VAO>(entity); !vao) { vao = &VAO::emplace(world, entity); }
+            if constexpr (A == VAO::Attribute::TEXTURE_2D) {
+                const auto &shaders = world.ctx<State *>()->shaders;
+                const auto found = std::find_if(begin(shaders), end(shaders), [](const auto &shader) {
+                    return shader->getName() == "texture_2D";
+                });
+                world.patch<VAO>(
+                    entity, [shader = found == std::end(shaders) ? shaders[0].get() : (*found).get()](auto &obj) {
+                        obj.shader_program = shader;
+                    });
+            }
+
             CALL_OPEN_GL(::glBindVertexArray(vao->object));
 
             VBO<A> obj{0u, std::move(in_vertices), in_stride_size};

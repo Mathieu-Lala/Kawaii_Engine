@@ -26,6 +26,7 @@ BreakBeforeBraces: WebKit
 BreakBeforeTernaryOperators: 'true'
 BreakConstructorInitializers: AfterColon
 BreakInheritanceList: AfterColon
+BreakStringLiterals: 'false'
 ColumnLimit: '110'
 CompactNamespaces: 'false'
 ConstructorInitializerAllOnOneLineOrOnePerLine: 'false'
