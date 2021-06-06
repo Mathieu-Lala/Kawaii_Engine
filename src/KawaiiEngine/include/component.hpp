@@ -143,6 +143,8 @@ struct Render {
 
             const VAO *vao{nullptr};
             if (vao = world.try_get<VAO>(entity); !vao) { vao = &VAO::emplace(world, entity); }
+
+            // todo : move this logics somewhere else
             if constexpr (A == VAO::Attribute::TEXTURE_2D) {
                 const auto &shaders = world.ctx<State *>()->shaders;
                 const auto found = std::find_if(begin(shaders), end(shaders), [](const auto &shader) {
@@ -180,10 +182,7 @@ struct Render {
                 });
             }
 
-            if (const auto vbo = world.try_get<VBO<A>>(entity); vbo != nullptr) {
-                world.remove<VBO<A>>(entity);
-            }
-            return world.emplace<VBO<A>>(entity, obj);
+            return world.emplace_or_replace<VBO<A>>(entity, obj);
         }
 
         template<std::size_t S>
@@ -420,6 +419,13 @@ struct Mesh {
     }
 };
 
+struct FillColor {
+    static constexpr std::string_view name{"Fill Color"};
+
+    // normalized value 0..1
+    glm::vec4 component{1.0f, 1.0f, 1.0f, 1.0f};
+};
+
 struct Texture2D {
     static constexpr std::string_view name{"Texture2D"};
 
@@ -500,6 +506,7 @@ using Component = std::variant<
     Children,
     // rendering
     Mesh,
+    FillColor,
     Render::VAO,
     Render::EBO,
     Render::VBO<Render::VAO::Attribute::POSITION>,

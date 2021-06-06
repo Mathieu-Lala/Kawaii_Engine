@@ -8,7 +8,7 @@ in vec3 fragLightPos;
 out vec4 outColor;
 
 vec3 lightColor = vec3(1.0, 1.0, 1.0);
-float ambientStrength = 0.1;
+float ambientStrength = 1;
 float specularStrength = 0.5;
 
 void main()

@@ -60,6 +60,26 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt:
 }
 
 template<>
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const FillColor &color) const
+    -> void
+{
+    float temp[4] = {
+        color.component.r,
+        color.component.g,
+        color.component.b,
+        color.component.a,
+    };
+    if (ImGui::ColorEdit4("color", temp)) {
+        world.patch<FillColor>(e, [&temp](auto &c) {
+            c.component.r = temp[0];
+            c.component.g = temp[1];
+            c.component.b = temp[2];
+            c.component.a = temp[3];
+        });
+    }
+}
+
+template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Velocity3f &vel) const
     -> void
 {

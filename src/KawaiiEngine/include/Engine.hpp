@@ -114,6 +114,34 @@ public:
         world.on_construct<Render::VBO<Render::VAO::Attribute::POSITION>>().connect<update_aabb>();
         world.on_update<Render::VBO<Render::VAO::Attribute::POSITION>>().connect<update_aabb>();
 
+        const auto update_vbo_color = [](entt::registry &reg, entt::entity e) {
+            const auto vbo_color = reg.try_get<Render::VBO<Render::VAO::Attribute::COLOR>>(e);
+            const auto vbo_pos = reg.try_get<Render::VBO<Render::VAO::Attribute::POSITION>>(e);
+            if (!vbo_color && !vbo_pos) return;
+
+            const auto size = vbo_color != nullptr ? vbo_color->vertices.size() : vbo_pos->vertices.size();
+            const auto stride_size = vbo_color != nullptr ? vbo_color->stride_size : vbo_pos->stride_size;
+
+            const auto fill_color = reg.get<FillColor>(e);
+            std::vector<float> vert{};
+            for (auto i = 0ul; i != size; i += stride_size) {
+                vert.emplace_back(fill_color.component.r);
+                vert.emplace_back(fill_color.component.g);
+                vert.emplace_back(fill_color.component.b);
+                vert.emplace_back(fill_color.component.a);
+            }
+            spdlog::info("here");
+            Render::VBO<Render::VAO::Attribute::COLOR>::emplace(reg, e, vert, 4);
+
+            spdlog::info("there");
+        };
+
+        world.on_construct<FillColor>().connect<update_vbo_color>();
+        world.on_update<FillColor>().connect<update_vbo_color>();
+
+        world.on_update<Render::VBO<Render::VAO::Attribute::COLOR>>()
+            .connect<[](entt::registry &reg, entt::entity e) -> void { reg.remove_if_exists<FillColor>(e); }>();
+
         // AABB alogrithm = really simple and fast collision detection
         const auto check_collision = [](entt::registry &reg, entt::entity e) -> void {
             const auto aabb = reg.get<AABB>(e);
@@ -132,33 +160,8 @@ public:
                 if (collide) {
                     reg.patch<Collider>(e, [](auto &c) { c.step = Collider::CollisionStep::AABB; });
                     reg.patch<Collider>(other, [](auto &c) { c.step = Collider::CollisionStep::AABB; });
-
-                    {
-                        // todo : this should be wrapped in a helper function ?
-                        const auto &vbo_color = reg.get<Render::VBO<Render::VAO::Attribute::COLOR>>(aabb.guizmo);
-                        std::vector<float> color_red{};
-                        for (auto i = 0ul; i != vbo_color.vertices.size(); i += vbo_color.stride_size) {
-                            color_red.emplace_back(1.0f); // r
-                            color_red.emplace_back(0.0f); // g
-                            color_red.emplace_back(0.0f); // b
-                            color_red.emplace_back(1.0f); // a
-                        }
-                        Render::VBO<Render::VAO::Attribute::COLOR>::emplace(reg, aabb.guizmo, color_red, 4);
-                    }
-
-                    {
-                        // todo : this should be wrapped in a helper function ?
-                        const auto &vbo_color =
-                            reg.get<Render::VBO<Render::VAO::Attribute::COLOR>>(other_aabb.guizmo);
-                        std::vector<float> color_red{};
-                        for (auto i = 0ul; i != vbo_color.vertices.size(); i += vbo_color.stride_size) {
-                            color_red.emplace_back(1.0f); // r
-                            color_red.emplace_back(0.0f); // g
-                            color_red.emplace_back(0.0f); // b
-                            color_red.emplace_back(1.0f); // a
-                        }
-                        Render::VBO<Render::VAO::Attribute::COLOR>::emplace(reg, other_aabb.guizmo, color_red, 4);
-                    }
+                    reg.emplace_or_replace<FillColor>(aabb.guizmo, glm::vec4{1.0f, 0.0f, 0.0f, 1.0f});
+                    reg.emplace_or_replace<FillColor>(other_aabb.guizmo, glm::vec4{1.0f, 0.0f, 0.0f, 1.0f});
                 }
             }
 
@@ -167,17 +170,7 @@ public:
             if (!has_aabb_collision) {
                 if (collider.step != Collider::CollisionStep::NONE) {
                     reg.patch<Collider>(e, [](auto &c) { c.step = Collider::CollisionStep::NONE; });
-
-                    // todo : this should be wrapped in a helper function ?
-                    const auto &vbo_color = reg.get<Render::VBO<Render::VAO::Attribute::COLOR>>(aabb.guizmo);
-                    std::vector<float> color_black{};
-                    for (auto i = 0ul; i != vbo_color.vertices.size(); i += vbo_color.stride_size) {
-                        color_black.emplace_back(0.0f); // r
-                        color_black.emplace_back(0.0f); // g
-                        color_black.emplace_back(0.0f); // b
-                        color_black.emplace_back(1.0f); // a
-                    }
-                    Render::VBO<Render::VAO::Attribute::COLOR>::emplace(reg, aabb.guizmo, color_black, 4);
+                    reg.emplace_or_replace<FillColor>(aabb.guizmo, glm::vec4{0.0f, 0.0f, 0.0f, 1.0f});
                 }
             }
         };

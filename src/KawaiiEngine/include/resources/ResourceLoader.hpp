@@ -48,7 +48,6 @@ namespace kawe {
 CREATE_LOADER_CLASS(
     Texture, auto load(const std::string &filepath)->std::shared_ptr<Texture> {
         int width, height, channels;
-        spdlog::error("path is '{}'.", filepath);
         const auto data = stbi_load(filepath.data(), &width, &height, &channels, STBI_rgb_alpha);
         if (!data) {
             spdlog::error("couldn't load texture at '{}'.", filepath);

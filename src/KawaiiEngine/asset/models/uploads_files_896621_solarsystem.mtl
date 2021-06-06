@@ -1,0 +1,77 @@
+#  ==========================================================================
+#  Wavefront Material file
+#  Exported by Red-i Productions' "Riptide Pro"
+#  (a commercial plugin for Cinema 4D PC & Mac, R10 or later)
+#  
+#  Red-i Productions
+#  http://skinprops.com
+#  
+#  ==========================================================================
+
+newmtl mercury
+Kd 0.800000 0.800000 0.800000
+illum 1
+map_Kd 8k_mercury.jpg
+
+newmtl neptune
+Kd 0.800000 0.800000 0.800000
+illum 1
+map_Kd 2k_neptune.jpg
+
+newmtl uranus
+Kd 0.800000 0.800000 0.800000
+illum 1
+map_Kd 2k_uranus.jpg
+
+newmtl jupiter
+Kd 0.800000 0.800000 0.800000
+illum 1
+map_Kd 8k_jupiter.jpg
+
+newmtl venus_texture_and_atmosphere
+Kd 0.800000 0.800000 0.800000
+illum 1
+map_Kd 8k_venus_surface.jpg
+
+newmtl saturn
+Kd 0.800000 0.800000 0.800000
+illum 1
+map_Kd 8k_saturn.jpg
+
+newmtl saturn_ring
+Kd 0.800000 0.800000 0.800000
+illum 1
+map_Kd saturn ring.jpg
+
+newmtl mars
+Kd 0.800000 0.800000 0.800000
+illum 1
+map_Kd 8k_mars.jpg
+
+newmtl sun
+Kd 1.000000 0.616667 0.000000
+illum 1
+map_Kd 8k_sun.jpg
+
+newmtl moon
+Kd 0.800000 0.800000 0.800000
+illum 1
+map_Kd moonmap4k.jpg
+
+newmtl earth
+Kd 0.800000 0.800000 0.800000
+illum 1
+map_Kd world.topo.200412.3x21600x10800.jpg
+bump gebco_08_rev_bath_21600x10800.png
+
+newmtl earth_atmosphere
+Kd 0.158510 0.376000 0.611922
+Tf 0.074510 0.333333 0.752941
+illum 1
+d 0.160000
+Ni 1.000000
+
+newmtl clouds
+Kd 0.800000 0.800000 0.800000
+illum 1
+map_d cloud.E.2001210.21600x21600.png
