@@ -143,8 +143,6 @@ struct Render {
 
             const VAO *vao{nullptr};
             if (vao = world.try_get<VAO>(entity); !vao) { vao = &VAO::emplace(world, entity); }
-
-            // todo : move this logics somewhere else
             if constexpr (A == VAO::Attribute::TEXTURE_2D) {
                 const auto &shaders = world.ctx<State *>()->shaders;
                 const auto found = std::find_if(begin(shaders), end(shaders), [](const auto &shader) {
