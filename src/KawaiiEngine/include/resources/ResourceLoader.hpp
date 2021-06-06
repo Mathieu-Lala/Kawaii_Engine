@@ -54,8 +54,10 @@ CREATE_LOADER_CLASS(
             spdlog::error("couldn't load texture at '{}'.", filepath);
             return nullptr;
         }
-        return std::shared_ptr<Texture>(
-            new Texture{width, height, channels, data}, [](Texture *obj) { ::stbi_image_free(obj->data); });
+        return std::shared_ptr<Texture>(new Texture{width, height, channels, data}, [](Texture *obj) {
+            ::stbi_image_free(obj->data);
+            delete obj;
+        });
     })
 
 // creates a model loader.
@@ -84,7 +86,7 @@ CREATE_LOADER_CLASS(
         // TODO: move this code into the model loader.
         for (const auto &shape : shapes) {
             for (const auto &index : shape.mesh.indices) {
-                glm::vec3 position{
+                const glm::vec3 position{
                     attributes.vertices[3 * size_t(index.vertex_index) + 0],
                     attributes.vertices[3 * size_t(index.vertex_index) + 1],
                     attributes.vertices[3 * size_t(index.vertex_index) + 2]};
@@ -107,13 +109,14 @@ CREATE_LOADER_CLASS(
                 if (!uniqueVertices.contains(position)) {
                     uniqueVertices[position] = static_cast<uint32_t>(model->vertices.size() / 3);
 
-                    // ! not really clean.
-                    // TODO: find a better way to store vertices.
                     model->vertices.push_back(position.x);
                     model->vertices.push_back(position.y);
                     model->vertices.push_back(position.z);
 
-                    model->normals.push_back(normal);
+                    model->normals.push_back(normal.x);
+                    model->normals.push_back(normal.y);
+                    model->normals.push_back(normal.z);
+
                     model->texcoords.push_back(texcoord.x);
                     model->texcoords.push_back(texcoord.y);
                 }
@@ -164,6 +167,8 @@ class ResourceLoader {
 public:
     template<typename T>
     auto load([[maybe_unused]] const std::string &filepath) -> std::shared_ptr<T>;
+
+    ResourceLoader() = default;
 
     ~ResourceLoader()
     {

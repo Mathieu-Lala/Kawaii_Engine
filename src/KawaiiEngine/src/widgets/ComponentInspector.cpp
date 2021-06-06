@@ -165,6 +165,38 @@ static auto stride_editor(
     }
 }
 
+template<std::size_t S>
+static auto stride_editor_ebo(
+    entt::registry &world,
+    entt::entity e,
+    const kawe::Render::EBO &ebo,
+    std::function<bool(std::size_t, std::array<std::uint32_t, S> &)> widget)
+{
+    std::size_t index = 0;
+    for (auto it = ebo.indices.begin(); it != ebo.indices.end(); it += 3) {
+        std::array<std::uint32_t, S> stride{};
+        std::copy(it, it + 3, stride.begin());
+        if (widget(index, stride)) {
+            auto temp = ebo.indices;
+            for (std::size_t i = 0; i != 3; i++) { temp[index * 3 + i] = stride[i]; }
+            kawe::Render::EBO::emplace(world, e, temp);
+            return;
+        }
+        index++;
+    }
+}
+
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Render::EBO &ebo) const
+    -> void
+{
+    stride_editor_ebo<3>(world, e, ebo, [&](auto index, auto &stride) {
+        int temp[] = {static_cast<int>(stride[0]), static_cast<int>(stride[1]), static_cast<int>(stride[2])};
+        return ImGui::InputInt3(fmt::format("{}", index).data(), temp);
+    });
+}
+
+
 template<>
 auto kawe::ComponentInspector::drawComponentTweaker(
     entt::registry &world, entt::entity e, const Render::VBO<Render::VAO::Attribute::POSITION> &vbo) const -> void
@@ -182,6 +214,76 @@ auto kawe::ComponentInspector::drawComponentTweaker(
         return ImGui::ColorEdit4(fmt::format("{}", index).data(), stride.data());
     });
 }
+
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(
+    entt::registry &world, entt::entity e, const Render::VBO<Render::VAO::Attribute::TEXTURE_2D> &vbo) const
+    -> void
+{
+    stride_editor<2>(world, e, vbo, [&](auto index, auto &stride) {
+        return ImGui::InputFloat2(fmt::format("{}", index).data(), stride.data());
+    });
+}
+
+constexpr static auto compute_normal(const glm::vec3 p1, const glm::vec3 p2, const glm::vec3 p3) -> glm::vec3
+{
+    const auto v1 = p2 - p1;
+    const auto v2 = p3 - p1;
+    return v1 * v2;
+}
+
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(
+    entt::registry &world, entt::entity e, const Render::VBO<Render::VAO::Attribute::NORMALS> &vbo) const -> void
+{
+    if (ImGui::Button("Compute the Normal from Position")) {
+        std::vector<float> normal;
+
+        const auto vbo_pos = world.get<Render::VBO<Render::VAO::Attribute::POSITION>>(e);
+        if (const auto ebo = world.try_get<Render::EBO>(e); ebo == nullptr) {
+            const auto offset = vbo_pos.stride_size * 3;
+            for (std::size_t i = 0; i != vbo_pos.vertices.size() / vbo_pos.stride_size / 3; i++) {
+                const auto vec_normal = compute_normal(
+                    {vbo_pos.vertices[i * offset + 0],
+                     vbo_pos.vertices[i * offset + 1],
+                     vbo_pos.vertices[i * offset + 2]},
+                    {vbo_pos.vertices[i * offset + 3],
+                     vbo_pos.vertices[i * offset + 4],
+                     vbo_pos.vertices[i * offset + 5]},
+                    {vbo_pos.vertices[i * offset + 6],
+                     vbo_pos.vertices[i * offset + 7],
+                     vbo_pos.vertices[i * offset + 8]});
+                for (int ii = 0; ii != 3; ii++) {
+                    normal.push_back(vec_normal.x);
+                    normal.push_back(vec_normal.y);
+                    normal.push_back(vec_normal.z);
+                }
+            }
+        } else {
+            for (std::size_t i = 0; i < vbo_pos.vertices.size(); i += 3) {
+                const auto vec_normal = compute_normal(
+                    {vbo_pos.vertices[ebo->indices[i + 0] + 0],
+                     vbo_pos.vertices[ebo->indices[i + 0] + 1],
+                     vbo_pos.vertices[ebo->indices[i + 0] + 2]},
+                    {vbo_pos.vertices[ebo->indices[i + 1] + 0],
+                     vbo_pos.vertices[ebo->indices[i + 1] + 1],
+                     vbo_pos.vertices[ebo->indices[i + 1] + 2]},
+                    {vbo_pos.vertices[ebo->indices[i + 2] + 0],
+                     vbo_pos.vertices[ebo->indices[i + 2] + 1],
+                     vbo_pos.vertices[ebo->indices[i + 2] + 2]});
+                normal.push_back(vec_normal.x);
+                normal.push_back(vec_normal.y);
+                normal.push_back(vec_normal.z);
+            }
+        }
+        Render::VBO<Render::VAO::Attribute::NORMALS>::emplace(world, e, normal, 3);
+    }
+
+    stride_editor<3>(world, e, vbo, [&](auto index, auto &stride) {
+        return ImGui::InputFloat3(fmt::format("{}", index).data(), stride.data());
+    });
+}
+
 
 template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Mesh &mesh) const
