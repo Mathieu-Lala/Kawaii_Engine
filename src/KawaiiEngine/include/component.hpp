@@ -182,7 +182,8 @@ struct Render {
                 });
             }
 
-            return world.emplace_or_replace<VBO<A>>(entity, obj);
+            world.remove_if_exists<VBO<A>>(entity);
+            return world.emplace<VBO<A>>(entity, obj);
         }
 
         template<std::size_t S>
