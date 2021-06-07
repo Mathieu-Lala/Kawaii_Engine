@@ -5,6 +5,7 @@
 #include <string>
 #include <variant>
 #include <limits>
+#include <functional>
 
 #include <glm/glm.hpp>
 #include <magic_enum.hpp>
@@ -497,6 +498,40 @@ struct Collider {
     // std::vector<entt::entity>
 };
 
+struct Clock {
+    static constexpr std::string_view name{"Clock"};
+
+    std::function<void(void)> callback;
+    std::chrono::milliseconds refresh_rate;
+    std::chrono::milliseconds current;
+
+    static auto
+    emplace(
+        entt::registry &world,
+        const entt::entity &entity,
+        const std::chrono::milliseconds &refresh_rate,
+        const std::function<void(void)> &callback
+    )
+        -> Clock &
+    {
+        Clock clock{ callback, refresh_rate, std::chrono::milliseconds::zero() };
+
+        world.ctx<entt::dispatcher *>()->sink<kawe::TimeElapsed>().connect<&Clock::on_update>(clock);
+
+        return world.emplace<Clock>(entity, clock);
+    }
+
+    auto on_update(const kawe::TimeElapsed &e) -> void
+    {
+        current += std::chrono::duration_cast<std::chrono::milliseconds>(e.elapsed);
+
+        if (current >= refresh_rate) {
+            callback();
+            current = std::chrono::milliseconds::zero();
+        }
+    }
+};
+
 using Component = std::variant<
     std::monostate,
     // system
@@ -520,6 +555,7 @@ using Component = std::variant<
     Gravitable3f,
     Velocity3f,
     Collider,
-    AABB>;
+    AABB,
+    Clock>;
 
 } // namespace kawe
