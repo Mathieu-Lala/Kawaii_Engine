@@ -75,7 +75,7 @@ CREATE_LOADER_CLASS(
         if (!err.empty()) spdlog::error("{}", err);
 
         if (!ret) {
-            spdlog::error("failed to load model");
+            spdlog::error("failed to load model.");
             return nullptr;
         }
 
