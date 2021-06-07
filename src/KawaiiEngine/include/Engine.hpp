@@ -130,10 +130,8 @@ public:
                 vert.emplace_back(fill_color.component.b);
                 vert.emplace_back(fill_color.component.a);
             }
-            spdlog::info("here");
-            Render::VBO<Render::VAO::Attribute::COLOR>::emplace(reg, e, vert, 4);
 
-            spdlog::info("there");
+            Render::VBO<Render::VAO::Attribute::COLOR>::emplace(reg, e, vert, 4);
         };
 
         world.on_construct<FillColor>().connect<update_vbo_color>();
