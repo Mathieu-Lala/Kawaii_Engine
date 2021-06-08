@@ -80,6 +80,30 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt:
 }
 
 template<>
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Texture2D &texture) const
+    -> void
+{
+    ImGui::Text("path: %s", texture.filepath.data());
+
+    ImGuiFileDialog::Instance()->SetExtentionInfos(".png", ImVec4(1.0f, 1.0f, 0.0f, 0.9f));
+    ImGuiFileDialog::Instance()->SetExtentionInfos(".jpg", ImVec4(1.0f, 1.0f, 0.0f, 0.9f));
+    ImGuiFileDialog::Instance()->SetExtentionInfos(".jpeg", ImVec4(1.0f, 1.0f, 0.0f, 0.9f));
+
+    if (ImGui::Button("From File"))
+        ImGuiFileDialog::Instance()->OpenDialog("kawe::Inspect::Mesh", "Choose File", ".png,.jpg,.jpeg", ".");
+
+    if (ImGuiFileDialog::Instance()->Display("kawe::Inspect::Mesh")) {
+        if (ImGuiFileDialog::Instance()->IsOk()) {
+            const auto path = ImGuiFileDialog::Instance()->GetFilePathName();
+
+            Texture2D::emplace(world, e, path);
+        }
+
+        ImGuiFileDialog::Instance()->Close();
+    }
+}
+
+template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Velocity3f &vel) const
     -> void
 {
