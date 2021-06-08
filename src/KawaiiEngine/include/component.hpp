@@ -435,9 +435,10 @@ struct Texture2D {
     static const Texture2D empty;
 
     static auto
-        emplace(entt::registry &world, entt::entity e, ResourceLoader &loader, const std::string &filepath)
+        emplace(entt::registry &world, entt::entity e, const std::string &filepath)
             -> Texture2D
     {
+        auto &loader = *world.ctx<kawe::ResourceLoader *>();
         Texture2D texture{filepath, 0u, loader.load<Texture>(filepath)};
 
         if (!texture.ref_resource) {
@@ -505,6 +506,7 @@ using Component = std::variant<
     Children,
     // rendering
     Mesh,
+    Texture2D,
     FillColor,
     Render::VAO,
     Render::EBO,
