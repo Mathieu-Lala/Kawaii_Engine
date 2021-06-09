@@ -28,6 +28,13 @@ struct State {
         shaders.emplace_back(std::make_unique<ShaderProgram>(
             "texture_2D", std::vector<uint32_t>{texture_2D_vert->shader_id, texture_2D_frag->shader_id}));
 
+        const auto normal_frag = world.ctx<ResourceLoader *>()->load<Shader>("./asset/shader/normal.vert");
+        const auto normal_vert = world.ctx<ResourceLoader *>()->load<Shader>("./asset/shader/normal.frag");
+
+        shaders.emplace_back(std::make_unique<ShaderProgram>(
+            "normal", std::vector<uint32_t>{normal_vert->shader_id, normal_frag->shader_id}));
+
+
         camera.emplace_back(window, glm::vec3{10.0f, 10.0f, 10.0f}, Rect4<float>{0.0f, 0.8f, 0.2f, 0.2f});
         camera.emplace_back(window, glm::vec3{5.0f, 5.0f, 5.0f}, Rect4<float>{0.0f, 0.0f, 1.0f, 1.0f});
 
