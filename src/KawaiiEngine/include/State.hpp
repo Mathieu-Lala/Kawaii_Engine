@@ -35,6 +35,12 @@ struct State {
             "normal", std::vector<uint32_t>{normal_vert->shader_id, normal_frag->shader_id}));
 
 
+        const auto picking_frag = world.ctx<ResourceLoader *>()->load<Shader>("./asset/shader/picking.vert");
+        const auto picking_vert = world.ctx<ResourceLoader *>()->load<Shader>("./asset/shader/picking.frag");
+
+        shaders.emplace_back(std::make_unique<ShaderProgram>(
+            "picking", std::vector<uint32_t>{picking_vert->shader_id, picking_frag->shader_id}));
+
         camera.emplace_back(window, glm::vec3{10.0f, 10.0f, 10.0f}, Rect4<float>{0.0f, 0.8f, 0.2f, 0.2f});
         camera.emplace_back(window, glm::vec3{5.0f, 5.0f, 5.0f}, Rect4<float>{0.0f, 0.0f, 1.0f, 1.0f});
 
