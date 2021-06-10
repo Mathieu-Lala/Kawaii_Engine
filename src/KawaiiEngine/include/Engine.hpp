@@ -74,6 +74,8 @@ public:
             return;
         }
 
+        spdlog::info("OpenGL version supported by this platform ({})", glGetString(GL_VERSION));
+
         IMGUI_CHECKVERSION();
 
         auto imgui_ctx = ImGui::CreateContext();
@@ -92,89 +94,27 @@ public:
             .connect<Render::VBO<Render::VAO::Attribute::COLOR>::on_destroy>();
         world.on_destroy<Render::EBO>().connect<Render::EBO::on_destroy>();
 
-        const auto update_aabb = [](entt::registry &reg, entt::entity e) -> void {
-            if (const auto collider = reg.try_get<Collider>(e); collider != nullptr) {
-                if (const auto vbo = reg.try_get<Render::VBO<Render::VAO::Attribute::POSITION>>(e);
-                    vbo != nullptr) {
-                    AABB::emplace(reg, e, vbo->vertices);
-                }
-            }
-        };
+        world.on_construct<Position3f>().connect<&Engine::update_aabb>(*this);
+        world.on_construct<Position3f>().connect<&Engine::update_aabb>(*this);
+        world.on_construct<Position3f>().connect<&Engine::update_aabb>(*this);
 
-        world.on_construct<Position3f>().connect<update_aabb>();
-        world.on_construct<Position3f>().connect<update_aabb>();
-        world.on_construct<Position3f>().connect<update_aabb>();
+        world.on_update<Position3f>().connect<&Engine::update_aabb>(*this);
+        world.on_update<Rotation3f>().connect<&Engine::update_aabb>(*this);
+        world.on_update<Scale3f>().connect<&Engine::update_aabb>(*this);
 
-        world.on_update<Position3f>().connect<update_aabb>();
-        world.on_update<Rotation3f>().connect<update_aabb>();
-        world.on_update<Scale3f>().connect<update_aabb>();
+        world.on_construct<Collider>().connect<&Engine::update_aabb>(*this);
 
-        world.on_construct<Collider>().connect<update_aabb>();
+        world.on_construct<Render::VBO<Render::VAO::Attribute::POSITION>>().connect<&Engine::update_aabb>(*this);
+        world.on_update<Render::VBO<Render::VAO::Attribute::POSITION>>().connect<&Engine::update_aabb>(*this);
 
-        world.on_construct<Render::VBO<Render::VAO::Attribute::POSITION>>().connect<update_aabb>();
-        world.on_update<Render::VBO<Render::VAO::Attribute::POSITION>>().connect<update_aabb>();
-
-        const auto update_vbo_color = [](entt::registry &reg, entt::entity e) {
-            const auto vbo_color = reg.try_get<Render::VBO<Render::VAO::Attribute::COLOR>>(e);
-            const auto vbo_pos = reg.try_get<Render::VBO<Render::VAO::Attribute::POSITION>>(e);
-            if (!vbo_color && !vbo_pos) return;
-
-            const auto size = vbo_color != nullptr ? vbo_color->vertices.size() : vbo_pos->vertices.size();
-            const auto stride_size = vbo_color != nullptr ? vbo_color->stride_size : vbo_pos->stride_size;
-
-            const auto fill_color = reg.get<FillColor>(e);
-            std::vector<float> vert{};
-            for (auto i = 0ul; i != size; i += stride_size) {
-                vert.emplace_back(fill_color.component.r);
-                vert.emplace_back(fill_color.component.g);
-                vert.emplace_back(fill_color.component.b);
-                vert.emplace_back(fill_color.component.a);
-            }
-
-            Render::VBO<Render::VAO::Attribute::COLOR>::emplace(reg, e, vert, 4);
-        };
-
-        world.on_construct<FillColor>().connect<update_vbo_color>();
-        world.on_update<FillColor>().connect<update_vbo_color>();
+        world.on_construct<FillColor>().connect<&Engine::update_vbo_color>(*this);
+        world.on_update<FillColor>().connect<&Engine::update_vbo_color>(*this);
 
         world.on_update<Render::VBO<Render::VAO::Attribute::COLOR>>()
             .connect<[](entt::registry &reg, entt::entity e) -> void { reg.remove_if_exists<FillColor>(e); }>();
 
-        // AABB alogrithm = really simple and fast collision detection
-        const auto check_collision = [](entt::registry &reg, entt::entity e) -> void {
-            const auto aabb = reg.get<AABB>(e);
-
-            bool has_aabb_collision = false;
-
-            for (const auto &other : reg.view<Collider, AABB>()) {
-                if (e == other) continue;
-                const auto other_aabb = reg.get<AABB>(other);
-
-                const auto collide = (aabb.min.x <= other_aabb.max.x && aabb.max.x >= other_aabb.min.x)
-                                     && (aabb.min.y <= other_aabb.max.y && aabb.max.y >= other_aabb.min.y)
-                                     && (aabb.min.z <= other_aabb.max.z && aabb.max.z >= other_aabb.min.z);
-                has_aabb_collision |= collide;
-
-                if (collide) {
-                    reg.patch<Collider>(e, [](auto &c) { c.step = Collider::CollisionStep::AABB; });
-                    reg.patch<Collider>(other, [](auto &c) { c.step = Collider::CollisionStep::AABB; });
-                    reg.emplace_or_replace<FillColor>(aabb.guizmo, glm::vec4{1.0f, 0.0f, 0.0f, 1.0f});
-                    reg.emplace_or_replace<FillColor>(other_aabb.guizmo, glm::vec4{1.0f, 0.0f, 0.0f, 1.0f});
-                }
-            }
-
-            // todo : this logic should be done on another signal named on_collision_resolved ...
-            const auto collider = reg.get<Collider>(e);
-            if (!has_aabb_collision) {
-                if (collider.step != Collider::CollisionStep::NONE) {
-                    reg.patch<Collider>(e, [](auto &c) { c.step = Collider::CollisionStep::NONE; });
-                    reg.emplace_or_replace<FillColor>(aabb.guizmo, glm::vec4{0.0f, 0.0f, 0.0f, 1.0f});
-                }
-            }
-        };
-
-        world.on_construct<AABB>().connect<check_collision>();
-        world.on_update<AABB>().connect<check_collision>();
+        world.on_construct<AABB>().connect<&Engine::check_collision>(*this);
+        world.on_update<AABB>().connect<&Engine::check_collision>(*this);
 
         world.set<entt::dispatcher *>(&dispatcher);
         world.set<ResourceLoader *>(&loader);
@@ -262,6 +202,68 @@ private:
     EntityHierarchy entity_hierarchy;
 
     std::unique_ptr<State> state;
+
+    auto update_aabb(entt::registry &reg, entt::entity e) -> void
+    {
+        if (const auto collider = reg.try_get<Collider>(e); collider != nullptr) {
+            if (const auto vbo = reg.try_get<Render::VBO<Render::VAO::Attribute::POSITION>>(e); vbo != nullptr) {
+                AABB::emplace(reg, e, vbo->vertices);
+            }
+        }
+    };
+
+    auto update_vbo_color(entt::registry &reg, entt::entity e) -> void {
+        const auto vbo_color = reg.try_get<Render::VBO<Render::VAO::Attribute::COLOR>>(e);
+        const auto vbo_pos = reg.try_get<Render::VBO<Render::VAO::Attribute::POSITION>>(e);
+        if (!vbo_color && !vbo_pos) return;
+
+        const auto size = vbo_color != nullptr ? vbo_color->vertices.size() : vbo_pos->vertices.size();
+        const auto stride_size = vbo_color != nullptr ? vbo_color->stride_size : vbo_pos->stride_size;
+
+        const auto fill_color = reg.get<FillColor>(e);
+        std::vector<float> vert{};
+        for (auto i = 0ul; i != size; i += stride_size) {
+            vert.emplace_back(fill_color.component.r);
+            vert.emplace_back(fill_color.component.g);
+            vert.emplace_back(fill_color.component.b);
+            vert.emplace_back(fill_color.component.a);
+        }
+
+        Render::VBO<Render::VAO::Attribute::COLOR>::emplace(reg, e, vert, 4);
+    };
+
+    // AABB alogrithm = really simple and fast collision detection
+    auto check_collision(entt::registry &reg, entt::entity e) -> void {
+        const auto aabb = reg.get<AABB>(e);
+
+        bool has_aabb_collision = false;
+
+        for (const auto &other : reg.view<Collider, AABB>()) {
+            if (e == other) continue;
+            const auto other_aabb = reg.get<AABB>(other);
+
+            const auto collide = (aabb.min.x <= other_aabb.max.x && aabb.max.x >= other_aabb.min.x)
+                                 && (aabb.min.y <= other_aabb.max.y && aabb.max.y >= other_aabb.min.y)
+                                 && (aabb.min.z <= other_aabb.max.z && aabb.max.z >= other_aabb.min.z);
+            has_aabb_collision |= collide;
+
+            if (collide) {
+                reg.patch<Collider>(e, [](auto &c) { c.step = Collider::CollisionStep::AABB; });
+                reg.patch<Collider>(other, [](auto &c) { c.step = Collider::CollisionStep::AABB; });
+                reg.emplace_or_replace<FillColor>(aabb.guizmo, glm::vec4{1.0f, 0.0f, 0.0f, 1.0f});
+                reg.emplace_or_replace<FillColor>(other_aabb.guizmo, glm::vec4{1.0f, 0.0f, 0.0f, 1.0f});
+            }
+        }
+
+        // todo : this logic should be done on another signal named on_collision_resolved ...
+        const auto collider = reg.get<Collider>(e);
+        if (!has_aabb_collision) {
+            if (collider.step != Collider::CollisionStep::NONE) {
+                reg.patch<Collider>(e, [](auto &c) { c.step = Collider::CollisionStep::NONE; });
+                reg.emplace_or_replace<FillColor>(aabb.guizmo, glm::vec4{0.0f, 0.0f, 0.0f, 1.0f});
+            }
+        }
+    };
 
     auto on_time_elapsed(const kawe::TimeElapsed &e) -> void
     {

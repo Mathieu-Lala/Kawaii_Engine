@@ -403,7 +403,7 @@ struct Mesh {
 
         if (!model) {
             // error
-            return world.emplace<Mesh>(entity, filepath, std::filesystem::path(filepath).filename(), false);
+            return world.emplace<Mesh>(entity, filepath, std::filesystem::path(filepath).filename().string(), false);
         }
 
         const Render::VAO *vao{nullptr};
@@ -414,7 +414,7 @@ struct Mesh {
         Render::VBO<Render::VAO::Attribute::NORMALS>::emplace(world, entity, model->normals, 3);
         Render::EBO::emplace(world, entity, model->indices);
 
-        return world.emplace_or_replace<Mesh>(entity, filepath, std::filesystem::path(filepath).filename(), true);
+        return world.emplace_or_replace<Mesh>(entity, filepath, std::filesystem::path(filepath).filename().string(), true);
     }
 };
 

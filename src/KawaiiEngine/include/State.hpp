@@ -37,6 +37,8 @@ struct State {
         for (const auto &i : magic_enum::enum_values<Key::Code>()) { keyboard_state[i] = false; }
     }
 
+    ~State(){ spdlog::warn("warning, state destructor."); }
+
     std::vector<std::unique_ptr<ShaderProgram>> shaders;
 
     std::vector<Camera> camera;
