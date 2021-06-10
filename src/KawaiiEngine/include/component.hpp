@@ -38,9 +38,8 @@ struct Name {
 template<std::size_t D, typename T>
 struct Position {
     static constexpr std::string_view name{"Position"};
-    static constexpr glm::vec<static_cast<int>(D), T> default_value{0.0f, 0.0f, 0.0f};
 
-    glm::vec<static_cast<int>(D), T> component{default_value};
+    glm::vec<static_cast<int>(D), T> component{0.0f, 0.0f, 0.0f};
 };
 
 using Position3f = Position<3, double>;
@@ -48,9 +47,8 @@ using Position3f = Position<3, double>;
 template<std::size_t D, typename T>
 struct Rotation {
     static constexpr std::string_view name{"Rotation"};
-    static constexpr glm::vec<static_cast<int>(D), T> default_value{0.0f, 0.0f, 0.0f};
 
-    glm::vec<static_cast<int>(D), T> component{default_value};
+    glm::vec<static_cast<int>(D), T> component{0.0f, 0.0f, 0.0f};
 };
 
 using Rotation3f = Rotation<3, double>;
@@ -58,9 +56,8 @@ using Rotation3f = Rotation<3, double>;
 template<std::size_t D, typename T>
 struct Scale {
     static constexpr std::string_view name{"Scale"};
-    static constexpr glm::vec<static_cast<int>(D), T> default_value{1.0f, 1.0f, 1.0f};
 
-    glm::vec<static_cast<int>(D), T> component{default_value};
+    glm::vec<static_cast<int>(D), T> component{1.0f, 1.0f, 1.0f};
 };
 
 using Scale3f = Scale<3, double>;
@@ -276,9 +273,9 @@ struct AABB {
             std::numeric_limits<double>::lowest(),
             std::numeric_limits<double>::lowest()};
 
-        constexpr auto default_pos = Position3f{Position3f::default_value};
-        constexpr auto default_scale = Scale3f{Scale3f::default_value};
-        constexpr auto default_rot = Rotation3f{Rotation3f::default_value};
+        constexpr auto default_pos = Position3f{};
+        constexpr auto default_scale = Scale3f{};
+        constexpr auto default_rot = Rotation3f{};
 
         // todo : avoid that
 
@@ -434,9 +431,7 @@ struct Texture2D {
 
     static const Texture2D empty;
 
-    static auto
-        emplace(entt::registry &world, entt::entity e, const std::string &filepath)
-            -> Texture2D
+    static auto emplace(entt::registry &world, entt::entity e, const std::string &filepath) -> Texture2D
     {
         auto &loader = *world.ctx<kawe::ResourceLoader *>();
         Texture2D texture{filepath, 0u, loader.load<Texture>(filepath)};
@@ -498,6 +493,12 @@ struct Collider {
     // std::vector<entt::entity>
 };
 
+struct Pickable {
+    static constexpr std::string_view name{"Pickable"};
+
+    bool is_picked{false};
+};
+
 using Component = std::variant<
     std::monostate,
     // system
@@ -522,6 +523,7 @@ using Component = std::variant<
     Gravitable3f,
     Velocity3f,
     Collider,
-    AABB>;
+    AABB,
+    Pickable>;
 
 } // namespace kawe
