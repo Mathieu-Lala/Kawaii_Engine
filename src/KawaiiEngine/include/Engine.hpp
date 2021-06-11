@@ -17,7 +17,6 @@
 #include "Event.hpp"
 #include "graphics/Shader.hpp"
 #include "component.hpp"
-#include "Camera.hpp"
 #include "State.hpp"
 
 #include "resources/ResourceLoader.hpp"
@@ -179,6 +178,13 @@ public:
         world.on_construct<AABB>().connect<check_collision>();
         world.on_update<AABB>().connect<check_collision>();
 
+
+        world.on_construct<CameraData>().connect<&Engine::update_camera>(*this);
+        world.on_update<CameraData>().connect<&Engine::update_camera>(*this);
+        dispatcher.sink<TimeElapsed>().connect<&Engine::update_camera_event>(*this);
+        world.on_update<Position3f>().connect<&Engine::update_camera>(*this);
+
+
         world.set<entt::dispatcher *>(&dispatcher);
         world.set<ResourceLoader *>(&loader);
         state = std::make_unique<State>(world, *window);
@@ -204,6 +210,9 @@ public:
         CALL_OPEN_GL(::glEnable(GL_DEPTH_TEST));
         CALL_OPEN_GL(::glEnable(GL_BLEND));
         CALL_OPEN_GL(::glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
+
+        const auto camera_one = world.create();
+        world.emplace<CameraData>(camera_one);
 
         on_create(world);
 
@@ -273,33 +282,18 @@ private:
             static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(dt_nano).count())
             / 1'000'000.0;
 
-        // note : camera logics should be a system // should be trigger by a signal
-        if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) {
-            for (auto &camera : state->camera) {
-                const auto viewport = camera.getViewport();
-                const auto window_size = window->getSize<double>();
-
-                if (!Rect4<double>{
-                        static_cast<double>(viewport.x) * window_size.x,
-                        static_cast<double>(viewport.y) * window_size.y,
-                        static_cast<double>(viewport.w) * window_size.x,
-                        static_cast<double>(viewport.h) * window_size.y}
-                         .contains(state->mouse_pos)) {
-                    continue;
-                }
-
-                for (const auto &[button, pressed] : state->state_mouse_button) {
-                    if (!pressed) { continue; }
-                    camera.handleMouseInput(button, state->mouse_pos, state->mouse_pos_when_pressed, dt_secs);
-                }
-            }
-        }
-
-
         for (const auto &entity : world.view<Position3f, Velocity3f>()) {
             const auto &vel = world.get<Velocity3f>(entity);
             world.patch<Position3f>(entity, [&vel, &dt_secs](auto &pos) {
                 pos.component += vel.component * static_cast<double>(dt_secs);
+            });
+        }
+
+        // note : is it the best way of doing that ?
+        for (const auto &entity : world.view<Velocity3f, CameraData>()) {
+            const auto &vel = world.get<Velocity3f>(entity);
+            world.patch<CameraData>(entity, [&vel, &dt_secs](auto &cam) {
+                cam.target_center += vel.component * static_cast<double>(dt_secs);
             });
         }
 
@@ -333,10 +327,98 @@ private:
         glfwSwapBuffers(window->get());
     }
 
+    auto update_camera(entt::registry &reg, entt::entity e) -> void
+    {
+        const auto &cam = reg.try_get<CameraData>(e);
+        if (cam == nullptr) { return; }
+        const auto &pos = reg.get_or_emplace<Position3f>(e, Position3f{glm::dvec3{1.0, 1.0, 1.0}});
+
+        const auto makeOrthogonalTo = [](const glm::dvec3 &vec1, const glm::dvec3 &vec2) -> glm::dvec3 {
+            if (const auto length = glm::length(vec2); length != 0) {
+                const auto scale = (vec1.x * vec2.x + vec1.y * vec2.y + vec1.z * vec2.z) / (length * length);
+                return {
+                    vec1.x - scale * vec2.x,
+                    vec1.y - scale * vec2.y,
+                    vec1.z - scale * vec2.z,
+                };
+            } else {
+                return vec1;
+            }
+        };
+
+        const auto viewDir = glm::normalize(cam->target_center - pos.component);
+
+        cam->imagePlaneVertDir = glm::normalize(makeOrthogonalTo(cam->up, viewDir));
+        cam->imagePlaneHorizDir = glm::normalize(glm::cross(viewDir, cam->imagePlaneVertDir));
+
+        const auto size = window->getSize<double>() * glm::dvec2{cam->viewport.w, cam->viewport.h};
+
+        cam->display.y = 2.0 * glm::length(cam->target_center - pos.component) * std::tan(0.5 * cam->fov);
+        cam->display.x = cam->display.y * (size.x / size.y);
+
+        cam->projection = glm::perspective(glm::radians(cam->fov), size.x / size.y, cam->near, cam->far);
+        cam->view = glm::lookAt(pos.component, cam->target_center, cam->up);
+    };
+
+    auto update_camera_event(const TimeElapsed &e) -> void
+    {
+        const auto dt_nano = e.elapsed;
+        const auto dt_secs =
+            static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(dt_nano).count())
+            / 1'000'000.0;
+
+        if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) {
+            for (auto &camera : world.view<CameraData>()) {
+                const auto &data = world.get<CameraData>(camera);
+                const auto viewport = data.viewport;
+                const auto window_size = window->getSize<double>();
+
+                if (!Rect4<double>{
+                        static_cast<double>(viewport.x) * window_size.x,
+                        static_cast<double>(viewport.y) * window_size.y,
+                        static_cast<double>(viewport.w) * window_size.x,
+                        static_cast<double>(viewport.h) * window_size.y}
+                         .contains(state->mouse_pos)) {
+                    continue;
+                }
+
+                for (const auto &[button, pressed] : state->state_mouse_button) {
+                    if (!pressed) { continue; }
+
+                    const auto ms = dt_secs * 1'000.0;
+                    const auto size = window->getSize<double>() * glm::dvec2{data.viewport.w, data.viewport.h};
+
+                    switch (button) {
+                    case kawe::MouseButton::Button::BUTTON_LEFT: {
+                        const auto amount_x = (state->mouse_pos.x - state->mouse_pos_when_pressed.x) / size.x;
+                        const auto amount_y = (state->mouse_pos_when_pressed.y - state->mouse_pos.y) / size.y;
+                        CameraData::rotate(world, camera, data, {amount_x * ms, amount_y * ms});
+                    } break;
+                    case kawe::MouseButton::Button::BUTTON_MIDDLE: {
+                        const auto amount = (state->mouse_pos_when_pressed.y - state->mouse_pos.y) / size.y;
+                        CameraData::zoom(world, camera, data, amount * ms);
+                    } break;
+                    case kawe::MouseButton::Button::BUTTON_RIGHT: {
+                        const auto amount_x = (state->mouse_pos.x - state->mouse_pos_when_pressed.x) / size.x;
+                        const auto amount_y = (state->mouse_pos_when_pressed.y - state->mouse_pos.y) / size.y;
+                        CameraData::translate(
+                            world,
+                            camera,
+                            data,
+                            {-amount_x * ms, -amount_y * ms},
+                            !state->keyboard_state[Key::Code::KEY_LEFT_CONTROL]);
+                    } break;
+                    default: break;
+                    }
+                }
+            }
+        }
+    }
+
     auto system_rendering() -> void
     {
         const auto render = [this]<bool has_ebo, bool has_texture, bool is_pickable>(
-                                kawe::Camera &cam,
+                                const CameraData &cam,
                                 [[maybe_unused]] const entt::entity &e,
                                 const Render::VAO &vao,
                                 const Position3f &pos,
@@ -354,8 +436,8 @@ private:
                 // note : note optimized at all !!! bad bad bad
                 // or is it ?
                 vao.shader_program->use();
-                vao.shader_program->setUniform("view", cam.getView());
-                vao.shader_program->setUniform("projection", cam.getProjection());
+                vao.shader_program->setUniform("view", cam.view);
+                vao.shader_program->setUniform("projection", cam.projection);
                 vao.shader_program->setUniform("model", model);
 
                 if constexpr (has_texture) { CALL_OPEN_GL(glBindTexture(GL_TEXTURE_2D, texture.textureID)); }
@@ -371,8 +453,8 @@ private:
                 const double b = (static_cast<int>(e) & 0x00FF0000) >> 16;
 
                 (*found)->use();
-                (*found)->setUniform("view", cam.getView());
-                (*found)->setUniform("projection", cam.getProjection());
+                (*found)->setUniform("view", cam.view);
+                (*found)->setUniform("projection", cam.projection);
                 (*found)->setUniform("model", model);
                 (*found)->setUniform("object_color", glm::dvec4{r / 255.0, g / 255.0, b / 255.0, 1.0});
             }
@@ -387,7 +469,7 @@ private:
             if constexpr (!is_pickable && has_texture) { CALL_OPEN_GL(glBindTexture(GL_TEXTURE_2D, 0)); }
         };
 
-        const auto render_all = [ this, &render ]<typename... With>(kawe::Camera & cam)
+        const auto render_all = [ this, &render ]<typename... With>(const CameraData &cam)
         {
             constexpr auto is_pickable = sizeof...(With) != 0;
 
@@ -686,8 +768,9 @@ private:
                 glClearColor(1, 1, 1, 1);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-                for (auto &i : state->camera) {
-                    const auto cam_viewport = i.getViewport();
+                for (auto &i : world.view<CameraData>()) {
+                    const auto &camera = world.get<CameraData>(i);
+                    const auto &cam_viewport = camera.viewport;
                     const auto window_size = window->getSize<float>();
                     GLint viewport[4] = {
                         static_cast<GLint>(cam_viewport.x * window_size.x),
@@ -696,15 +779,13 @@ private:
                         static_cast<GLsizei>(cam_viewport.h * window_size.y)};
                     ::glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
 
-                    render_all.operator()<Pickable>(i);
+                    render_all.operator()<Pickable>(camera);
                 }
+                // note : is it required ?
                 glFlush();
                 glFinish();
 
                 glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
-                spdlog::warn(
-                    "mouse pos = {} {}", state->mouse_pos_when_pressed.x, state->mouse_pos_when_pressed.y);
 
                 std::array<std::uint8_t, 4> data{0, 0, 0, 0};
                 glReadPixels(
@@ -723,15 +804,18 @@ private:
                 } else {
                     component_inspector.selected = static_cast<entt::entity>(pickedID);
                 }
+
+                // todo : send a signal to the app ?
             }
         }
         glClearColor(state->clear_color.r, state->clear_color.g, state->clear_color.b, state->clear_color.a);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        for (auto &i : state->camera) {
+        for (auto &i : world.view<CameraData>()) {
+            const auto &camera = world.get<CameraData>(i);
             // todo : when resizing the window, the object deform
             // this doesn t sound kind right ...
-            const auto cam_viewport = i.getViewport();
+            const auto cam_viewport = camera.viewport;
             const auto window_size = window->getSize<float>();
             GLint viewport[4] = {
                 static_cast<GLint>(cam_viewport.x * window_size.x),
@@ -740,7 +824,7 @@ private:
                 static_cast<GLsizei>(cam_viewport.h * window_size.y)};
             ::glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
 
-            render_all(i);
+            render_all(camera);
         }
     }
 
