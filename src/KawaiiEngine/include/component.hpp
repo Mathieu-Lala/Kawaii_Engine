@@ -13,6 +13,8 @@
 
 #include <GL/glew.h>
 
+#include "helpers/Rectangle.hpp"
+
 #include "resources/ResourceLoader.hpp"
 #include "State.hpp"
 
@@ -39,9 +41,8 @@ struct Name {
 template<std::size_t D, typename T>
 struct Position {
     static constexpr std::string_view name{"Position"};
-    static constexpr glm::vec<static_cast<int>(D), T> default_value{0.0f, 0.0f, 0.0f};
 
-    glm::vec<static_cast<int>(D), T> component{default_value};
+    glm::vec<static_cast<int>(D), T> component{0.0f, 0.0f, 0.0f};
 };
 
 using Position3f = Position<3, double>;
@@ -49,9 +50,8 @@ using Position3f = Position<3, double>;
 template<std::size_t D, typename T>
 struct Rotation {
     static constexpr std::string_view name{"Rotation"};
-    static constexpr glm::vec<static_cast<int>(D), T> default_value{0.0f, 0.0f, 0.0f};
 
-    glm::vec<static_cast<int>(D), T> component{default_value};
+    glm::vec<static_cast<int>(D), T> component{0.0f, 0.0f, 0.0f};
 };
 
 using Rotation3f = Rotation<3, double>;
@@ -59,9 +59,8 @@ using Rotation3f = Rotation<3, double>;
 template<std::size_t D, typename T>
 struct Scale {
     static constexpr std::string_view name{"Scale"};
-    static constexpr glm::vec<static_cast<int>(D), T> default_value{1.0f, 1.0f, 1.0f};
 
-    glm::vec<static_cast<int>(D), T> component{default_value};
+    glm::vec<static_cast<int>(D), T> component{1.0f, 1.0f, 1.0f};
 };
 
 using Scale3f = Scale<3, double>;
@@ -277,9 +276,9 @@ struct AABB {
             std::numeric_limits<double>::lowest(),
             std::numeric_limits<double>::lowest()};
 
-        constexpr auto default_pos = Position3f{Position3f::default_value};
-        constexpr auto default_scale = Scale3f{Scale3f::default_value};
-        constexpr auto default_rot = Rotation3f{Rotation3f::default_value};
+        constexpr auto default_pos = Position3f{};
+        constexpr auto default_scale = Scale3f{};
+        constexpr auto default_rot = Rotation3f{};
 
         // todo : avoid that
 
@@ -435,10 +434,9 @@ struct Texture2D {
 
     static const Texture2D empty;
 
-    static auto
-        emplace(entt::registry &world, entt::entity e, ResourceLoader &loader, const std::string &filepath)
-            -> Texture2D
+    static auto emplace(entt::registry &world, entt::entity e, const std::string &filepath) -> Texture2D
     {
+        auto &loader = *world.ctx<kawe::ResourceLoader *>();
         Texture2D texture{filepath, 0u, loader.load<Texture>(filepath)};
 
         if (!texture.ref_resource) {
@@ -476,7 +474,6 @@ struct Texture2D {
         return world.emplace_or_replace<Texture2D>(e, texture);
     }
 };
-
 
 struct Collider {
     static constexpr std::string_view name{"Collider"};
@@ -539,14 +536,99 @@ struct Clock {
     }
 };
 
+struct Pickable {
+    static constexpr std::string_view name{"Pickable"};
+
+    bool is_picked{false};
+};
+
+struct CameraData {
+    static constexpr std::string_view name{"Camera Data"};
+
+    Rect4<float> viewport{0.0f, 0.0f, 1.0f, 1.0f};
+
+    glm::dmat4 projection{};
+    glm::dmat4 view{};
+
+    double fov{45.0};
+    double near{0.1};
+    double far{1000.0};
+
+    glm::dvec3 imagePlaneHorizDir{};
+    glm::dvec3 imagePlaneVertDir{};
+    glm::dvec2 display{};
+
+    glm::dvec3 target_center{0.0, 0.0, 0.0};
+    glm::dvec3 up{0.0, 1.0, 0.0};
+
+    static constexpr double DEFAULT_ROTATE_SPEED = 2.0 / 100.0;
+    static constexpr double DEFAULT_ZOOM_FRACTION = 2.5 / 100.0;
+    static constexpr double DEFAULT_TRANSLATE_SPEED = 0.5 / 100.0;
+
+    // double fractionChangeX, double fractionChangeY
+
+    static auto rotate(entt::registry &world, entt::entity e, const CameraData &cam, const glm::dvec2 &amount)
+    {
+        const auto setFromAxisAngle = [](const glm::dvec3 &axis, double angle) -> glm::dquat {
+            const auto cosAng = std::cos(angle / 2.0);
+            const auto sinAng = std::sin(angle / 2.0);
+            const auto norm = std::sqrt(axis.x * axis.x + axis.y * axis.y + axis.z * axis.z);
+
+            return {
+                sinAng * axis.x / norm,
+                sinAng * axis.y / norm,
+                sinAng * axis.z / norm,
+                cosAng};
+        };
+
+        const auto horizRot = setFromAxisAngle(cam.imagePlaneHorizDir, DEFAULT_ROTATE_SPEED * amount.y);
+        const auto vertRot = setFromAxisAngle(cam.imagePlaneVertDir, -DEFAULT_ROTATE_SPEED * amount.x);
+        const auto totalRot = horizRot * vertRot;
+
+        const auto pos = world.get<Position3f>(e);
+
+        world.patch<Position3f>(e, [&cam, viewVec = totalRot * (pos.component - cam.target_center)](auto &p) {
+            p.component = cam.target_center + viewVec;
+        });
+        world.patch<CameraData>(e, [](auto &) {});
+    }
+
+    static auto zoom(entt::registry &world, entt::entity e, const CameraData &cam, double amount)
+    {
+        world.patch<Position3f>(e, [scaleFactor = std::pow(2.0, -amount * DEFAULT_ZOOM_FRACTION), &cam](auto &pos) {
+            pos.component = cam.target_center + (pos.component - cam.target_center) * scaleFactor;
+        });
+        world.patch<CameraData>(e, [](auto &) {});
+    }
+
+    //  double changeHoriz, double changeVert,
+
+    static auto
+        translate(entt::registry &world, entt::entity e, const CameraData &cam, const glm::dvec2 &amount, bool parallelToViewPlane)
+    {
+        const auto &pos = world.get<Position3f>(e);
+        const auto translateVec = parallelToViewPlane
+                                      ? (cam.imagePlaneHorizDir * (cam.display.x * amount.x))
+                                            + (cam.imagePlaneVertDir * (amount.y * cam.display.y))
+                                      : (cam.target_center - pos.component) * amount.y;
+
+        world.patch<Position3f>(
+            e, [&translateVec](auto &p) { p.component += translateVec * DEFAULT_TRANSLATE_SPEED; });
+        world.patch<CameraData>(
+            e, [&translateVec](auto &c) { c.target_center += translateVec * DEFAULT_TRANSLATE_SPEED; });
+    }
+};
+
 using Component = std::variant<
     std::monostate,
     // system
     Name,
     Parent,
     Children,
+    CameraData,
     // rendering
     Mesh,
+    Texture2D,
     FillColor,
     Render::VAO,
     Render::EBO,
@@ -563,6 +645,7 @@ using Component = std::variant<
     Velocity3f,
     Collider,
     AABB,
-    Clock>;
+    Clock,
+    Pickable>;
 
 } // namespace kawe

@@ -80,6 +80,30 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt:
 }
 
 template<>
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Texture2D &texture) const
+    -> void
+{
+    ImGui::Text("path: %s", texture.filepath.data());
+
+    ImGuiFileDialog::Instance()->SetExtentionInfos(".png", ImVec4(1.0f, 1.0f, 0.0f, 0.9f));
+    ImGuiFileDialog::Instance()->SetExtentionInfos(".jpg", ImVec4(1.0f, 1.0f, 0.0f, 0.9f));
+    ImGuiFileDialog::Instance()->SetExtentionInfos(".jpeg", ImVec4(1.0f, 1.0f, 0.0f, 0.9f));
+
+    if (ImGui::Button("From File"))
+        ImGuiFileDialog::Instance()->OpenDialog("kawe::Inspect::Mesh", "Choose File", ".png,.jpg,.jpeg", ".");
+
+    if (ImGuiFileDialog::Instance()->Display("kawe::Inspect::Mesh")) {
+        if (ImGuiFileDialog::Instance()->IsOk()) {
+            const auto path = ImGuiFileDialog::Instance()->GetFilePathName();
+
+            Texture2D::emplace(world, e, path);
+        }
+
+        ImGuiFileDialog::Instance()->Close();
+    }
+}
+
+template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Velocity3f &vel) const
     -> void
 {
@@ -371,6 +395,120 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt:
             ImGui::Text("children[%d] = '%s'", it++, world.get<Name>(i).component.data());
         }
     }
+}
+
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const CameraData &camera) const
+    -> void
+{
+    static constexpr auto epsilon = 0.0001f;
+
+    // todo : improve me
+    {
+        bool viewport_updated = false;
+
+        Rect4<float> temp = {
+            .x = camera.viewport.x,
+            .y = 1.0f - camera.viewport.y,
+            .w = camera.viewport.w,
+            .h = 1.0f - camera.viewport.h};
+
+        ImGui::Dummy(ImVec2(18 * 2 + 4, 18));
+        ImGui::SameLine();
+        ImGui::PushItemWidth(160);
+        viewport_updated |= ImGui::SliderFloat("##viewport.x", &temp.x, 0.0f, 1.0f, "");
+        ImGui::PopItemWidth();
+
+        ImGui::Dummy(ImVec2(18 * 2 + 4, 18));
+        ImGui::SameLine();
+        ImGui::PushItemWidth(160);
+        viewport_updated |= ImGui::SliderFloat("##viewport.w", &temp.w, 0.0f, 1.0f, "");
+        ImGui::PopItemWidth();
+
+        viewport_updated |= ImGui::VSliderFloat("##viewport.y", ImVec2(18, 160), &temp.y, epsilon, 1.0f, "");
+        temp.y = 1.0f - temp.y;
+        ImGui::SameLine();
+        viewport_updated |= ImGui::VSliderFloat("##viewport.h", ImVec2(18, 160), &temp.h, epsilon, 1.0f, "");
+        temp.h = 1.0f - temp.h;
+
+        ImGui::SameLine();
+        const auto old_cursor = ImGui::GetCursorPos();
+
+        ImGui::SetCursorPos(ImVec2(old_cursor.x + temp.x * 160, old_cursor.y + temp.y * 160));
+        ImGui::Button(
+            "A", ImVec2(std::max(epsilon, temp.w - temp.x) * 160, std::max(epsilon, temp.h - temp.y) * 160));
+        ImGui::SetCursorPosY(old_cursor.y + 160 + 4);
+
+        if (viewport_updated) {
+            world.patch<CameraData>(e, [&temp](auto &c) {
+                c.viewport = Rect4<float>{
+                    .x = temp.x,
+                    .y = temp.y,
+                    .w = temp.w,
+                    .h = temp.h,
+                };
+            });
+        }
+    }
+    ImGui::Separator();
+
+    ImGui::PushItemWidth(150);
+    {
+        auto fov_temp = static_cast<float>(camera.fov);
+        if (ImGui::DragFloat(
+                "fov", &fov_temp, 1.0f, epsilon, 180.0f - epsilon, "%.3f", ImGuiSliderFlags_Logarithmic)) {
+            world.patch<CameraData>(e, [&fov_temp](auto &c) { c.fov = fov_temp; });
+        }
+    }
+    ImGui::SameLine();
+    {
+        auto near_temp = static_cast<float>(camera.near);
+        if (ImGui::DragFloat("near", &near_temp, 1.0f, epsilon, static_cast<float>(camera.far) - epsilon)) {
+            world.patch<CameraData>(e, [&near_temp](auto &c) { c.near = near_temp; });
+        }
+    }
+    ImGui::SameLine();
+    {
+        auto far_temp = static_cast<float>(camera.far);
+        if (ImGui::DragFloat(
+                "far",
+                &far_temp,
+                1.0f,
+                static_cast<float>(camera.near) + epsilon,
+                1'000'000.0f,
+                "%.3f",
+                ImGuiSliderFlags_Logarithmic)) {
+            world.patch<CameraData>(e, [&far_temp](auto &c) { c.far = far_temp; });
+        }
+    }
+    ImGui::PopItemWidth();
+
+    ImGui::Separator();
+
+    ImGui::Text(fmt::format(
+                    "target position: {{.x: {}, .y: {}, .z: {}}}",
+                    camera.target_center.x,
+                    camera.target_center.y,
+                    camera.target_center.z)
+                    .data());
+
+    // read only data
+
+    ImGui::Text(fmt::format("display: {{.x: {}, .y: {}}}", camera.display.x, camera.display.y).data());
+
+    ImGui::Text(fmt::format(
+                    "plan vert: {{.x: {}, .y: {}, .z: {}}}",
+                    camera.imagePlaneVertDir.x,
+                    camera.imagePlaneVertDir.y,
+                    camera.imagePlaneVertDir.z)
+                    .data());
+
+    ImGui::Text(fmt::format(
+                    "plan horz: {{.x: {}, .y: {}, .z: {}}}",
+                    camera.imagePlaneHorizDir.x,
+                    camera.imagePlaneHorizDir.y,
+                    camera.imagePlaneHorizDir.z)
+                    .data());
 }
 
 auto kawe::ComponentInspector::draw(entt::registry &world) -> void

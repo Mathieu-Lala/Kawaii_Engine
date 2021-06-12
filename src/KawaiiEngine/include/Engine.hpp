@@ -17,7 +17,6 @@
 #include "Event.hpp"
 #include "graphics/Shader.hpp"
 #include "component.hpp"
-#include "Camera.hpp"
 #include "State.hpp"
 
 #include "resources/ResourceLoader.hpp"
@@ -29,18 +28,6 @@
 using namespace std::chrono_literals;
 
 namespace kawe {
-
-void GLAPIENTRY gl_message_callback(
-    [[maybe_unused]] GLenum source,
-    [[maybe_unused]] GLenum type,
-    [[maybe_unused]] GLuint id,
-    [[maybe_unused]] GLenum severity,
-    [[maybe_unused]] GLsizei length,
-    const GLchar *message,
-    [[maybe_unused]] const void *userParam)
-{
-    spdlog::error("GL CALLBACK: {} message = {}", (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""), message);
-}
 
 class Engine {
 public:
@@ -54,6 +41,7 @@ public:
         glfwSetErrorCallback([](int code, const char *message) {
             spdlog::error("[GLFW] An error occured '{}' 'code={}'\n", message, code);
         });
+
 
         if (glfwInit() == GLFW_FALSE) { return; }
 
@@ -73,6 +61,20 @@ public:
             spdlog::error("[GLEW] An error occured '{}' 'code={}'", glewGetErrorString(err), err);
             return;
         }
+
+
+        glDebugMessageCallback(
+            []([[maybe_unused]] GLenum source,
+               [[maybe_unused]] GLenum type,
+               [[maybe_unused]] GLuint id,
+               [[maybe_unused]] GLenum severity,
+               [[maybe_unused]] GLsizei length,
+               const GLchar *message,
+               [[maybe_unused]] const void *userParam) {
+                spdlog::error(
+                    "GL CALLBACK: {} message = {}", (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""), message);
+            },
+            nullptr);
 
         IMGUI_CHECKVERSION();
 
@@ -176,6 +178,13 @@ public:
         world.on_construct<AABB>().connect<check_collision>();
         world.on_update<AABB>().connect<check_collision>();
 
+
+        world.on_construct<CameraData>().connect<&Engine::update_camera>(*this);
+        world.on_update<CameraData>().connect<&Engine::update_camera>(*this);
+        dispatcher.sink<TimeElapsed>().connect<&Engine::update_camera_event>(*this);
+        world.on_update<Position3f>().connect<&Engine::update_camera>(*this);
+
+
         world.set<entt::dispatcher *>(&dispatcher);
         world.set<ResourceLoader *>(&loader);
         state = std::make_unique<State>(world, *window);
@@ -201,6 +210,9 @@ public:
         CALL_OPEN_GL(::glEnable(GL_DEPTH_TEST));
         CALL_OPEN_GL(::glEnable(GL_BLEND));
         CALL_OPEN_GL(::glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
+
+        const auto camera_one = world.create();
+        world.emplace<CameraData>(camera_one);
 
         on_create(world);
 
@@ -270,33 +282,18 @@ private:
             static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(dt_nano).count())
             / 1'000'000.0;
 
-        { // note : camera logics should be a system // should be trigger by a signal
-            if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) {
-                for (auto &camera : state->camera) {
-                    const auto viewport = camera.getViewport();
-                    const auto window_size = window->getSize<double>();
-
-                    if (!Rect4<double>{
-                            static_cast<double>(viewport.x) * window_size.x,
-                            static_cast<double>(viewport.y) * window_size.y,
-                            static_cast<double>(viewport.w) * window_size.x,
-                            static_cast<double>(viewport.h) * window_size.y}
-                             .contains(state->mouse_pos)) {
-                        continue;
-                    }
-
-                    for (const auto &[button, pressed] : state->state_mouse_button) {
-                        if (!pressed) { continue; }
-                        camera.handleMouseInput(button, state->mouse_pos, state->mouse_pos_when_pressed, dt_secs);
-                    }
-                }
-            }
-        }
-
         for (const auto &entity : world.view<Position3f, Velocity3f>()) {
             const auto &vel = world.get<Velocity3f>(entity);
             world.patch<Position3f>(entity, [&vel, &dt_secs](auto &pos) {
                 pos.component += vel.component * static_cast<double>(dt_secs);
+            });
+        }
+
+        // note : is it the best way of doing that ?
+        for (const auto &entity : world.view<Velocity3f, CameraData>()) {
+            const auto &vel = world.get<Velocity3f>(entity);
+            world.patch<CameraData>(entity, [&vel, &dt_secs](auto &cam) {
+                cam.target_center += vel.component * static_cast<double>(dt_secs);
             });
         }
 
@@ -307,6 +304,7 @@ private:
             });
         }
 
+        // todo : trigger a time elapsed only if the simulation is running
         dispatcher.trigger<kawe::TimeElapsed>(e);
 
         ImGui_ImplOpenGL3_NewFrame();
@@ -322,49 +320,144 @@ private:
 
         ImGui::Render();
 
-        glClearColor(state->clear_color.r, state->clear_color.g, state->clear_color.b, state->clear_color.a);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        for (auto &i : state->camera) { system_rendering(i); }
+        system_rendering();
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         glfwSwapBuffers(window->get());
     }
 
-    auto system_rendering(Camera &camera) -> void
+    auto update_camera(entt::registry &reg, entt::entity e) -> void
     {
-        // todo : when resizing the window, the object deform
-        // this doesn t sound kind right ...
-        const auto viewport = camera.getViewport();
-        const auto window_size = window->getSize<float>();
-        ::glViewport(
-            static_cast<GLint>(viewport.x * window_size.x),
-            static_cast<GLint>(viewport.y * window_size.y),
-            static_cast<GLsizei>(viewport.w * window_size.x),
-            static_cast<GLsizei>(viewport.h * window_size.y));
+        const auto &cam = reg.try_get<CameraData>(e);
+        if (cam == nullptr) { return; }
+        const auto &pos = reg.get_or_emplace<Position3f>(e, Position3f{glm::dvec3{1.0, 1.0, 1.0}});
 
-        const auto render = [&camera]<bool has_ebo, bool has_texture>(
+        const auto makeOrthogonalTo = [](const glm::dvec3 &vec1, const glm::dvec3 &vec2) -> glm::dvec3 {
+            if (const auto length = glm::length(vec2); length != 0) {
+                const auto scale = (vec1.x * vec2.x + vec1.y * vec2.y + vec1.z * vec2.z) / (length * length);
+                return {
+                    vec1.x - scale * vec2.x,
+                    vec1.y - scale * vec2.y,
+                    vec1.z - scale * vec2.z,
+                };
+            } else {
+                return vec1;
+            }
+        };
+
+        const auto viewDir = glm::normalize(cam->target_center - pos.component);
+
+        cam->imagePlaneVertDir = glm::normalize(makeOrthogonalTo(cam->up, viewDir));
+        cam->imagePlaneHorizDir = glm::normalize(glm::cross(viewDir, cam->imagePlaneVertDir));
+
+        const auto size = window->getSize<double>() * glm::dvec2{cam->viewport.w, cam->viewport.h};
+
+        cam->display.y = 2.0 * glm::length(cam->target_center - pos.component) * std::tan(0.5 * cam->fov);
+        cam->display.x = cam->display.y * (size.x / size.y);
+
+        cam->projection = glm::perspective(glm::radians(cam->fov), size.x / size.y, cam->near, cam->far);
+        cam->view = glm::lookAt(pos.component, cam->target_center, cam->up);
+    };
+
+    auto update_camera_event(const TimeElapsed &e) -> void
+    {
+        const auto dt_nano = e.elapsed;
+        const auto dt_secs =
+            static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(dt_nano).count())
+            / 1'000'000.0;
+
+        if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) {
+            for (auto &camera : world.view<CameraData>()) {
+                const auto &data = world.get<CameraData>(camera);
+                const auto viewport = data.viewport;
+                const auto window_size = window->getSize<double>();
+
+                if (!Rect4<double>{
+                        static_cast<double>(viewport.x) * window_size.x,
+                        static_cast<double>(viewport.y) * window_size.y,
+                        static_cast<double>(viewport.w) * window_size.x,
+                        static_cast<double>(viewport.h) * window_size.y}
+                         .contains(state->mouse_pos)) {
+                    continue;
+                }
+
+                for (const auto &[button, pressed] : state->state_mouse_button) {
+                    if (!pressed) { continue; }
+
+                    const auto ms = dt_secs * 1'000.0;
+                    const auto size = window->getSize<double>() * glm::dvec2{data.viewport.w, data.viewport.h};
+
+                    switch (button) {
+                    case kawe::MouseButton::Button::BUTTON_LEFT: {
+                        const auto amount_x = (state->mouse_pos.x - state->mouse_pos_when_pressed.x) / size.x;
+                        const auto amount_y = (state->mouse_pos_when_pressed.y - state->mouse_pos.y) / size.y;
+                        CameraData::rotate(world, camera, data, {amount_x * ms, amount_y * ms});
+                    } break;
+                    case kawe::MouseButton::Button::BUTTON_MIDDLE: {
+                        const auto amount = (state->mouse_pos_when_pressed.y - state->mouse_pos.y) / size.y;
+                        CameraData::zoom(world, camera, data, amount * ms);
+                    } break;
+                    case kawe::MouseButton::Button::BUTTON_RIGHT: {
+                        const auto amount_x = (state->mouse_pos.x - state->mouse_pos_when_pressed.x) / size.x;
+                        const auto amount_y = (state->mouse_pos_when_pressed.y - state->mouse_pos.y) / size.y;
+                        CameraData::translate(
+                            world,
+                            camera,
+                            data,
+                            {-amount_x * ms, -amount_y * ms},
+                            !state->keyboard_state[Key::Code::KEY_LEFT_CONTROL]);
+                    } break;
+                    default: break;
+                    }
+                }
+            }
+        }
+    }
+
+    auto system_rendering() -> void
+    {
+        const auto render = [this]<bool has_ebo, bool has_texture, bool is_pickable>(
+                                const CameraData &cam,
+                                [[maybe_unused]] const entt::entity &e,
                                 const Render::VAO &vao,
                                 const Position3f &pos,
                                 const Rotation3f &rot,
                                 const Scale3f &scale,
                                 const Texture2D &texture) {
-            // note : note optimized at all !!! bad bad bad
-            // or is it ?
-            vao.shader_program->use();
-            vao.shader_program->setUniform("view", camera.getView());
-            vao.shader_program->setUniform("projection", camera.getProjection());
-
             auto model = glm::dmat4(1.0);
             model = glm::translate(model, pos.component);
             model = glm::rotate(model, glm::radians(rot.component.x), glm::dvec3(1.0, 0.0, 0.0));
             model = glm::rotate(model, glm::radians(rot.component.y), glm::dvec3(0.0, 1.0, 0.0));
             model = glm::rotate(model, glm::radians(rot.component.z), glm::dvec3(0.0, 0.0, 1.0));
             model = glm::scale(model, scale.component);
-            vao.shader_program->setUniform("model", model);
 
-            if constexpr (has_texture) { glBindTexture(GL_TEXTURE_2D, texture.textureID); }
+            if constexpr (!is_pickable) {
+                // note : note optimized at all !!! bad bad bad
+                // or is it ?
+                vao.shader_program->use();
+                vao.shader_program->setUniform("view", cam.view);
+                vao.shader_program->setUniform("projection", cam.projection);
+                vao.shader_program->setUniform("model", model);
+
+                if constexpr (has_texture) { CALL_OPEN_GL(glBindTexture(GL_TEXTURE_2D, texture.textureID)); }
+            } else {
+                const auto found = std::find_if(state->shaders.begin(), state->shaders.end(), [](auto &shader) {
+                    return shader->getName() == "picking";
+                });
+
+                assert(found != state->shaders.end());
+
+                const double r = (static_cast<int>(e) & 0x000000FF) >> 0;
+                const double g = (static_cast<int>(e) & 0x0000FF00) >> 8;
+                const double b = (static_cast<int>(e) & 0x00FF0000) >> 16;
+
+                (*found)->use();
+                (*found)->setUniform("view", cam.view);
+                (*found)->setUniform("projection", cam.projection);
+                (*found)->setUniform("model", model);
+                (*found)->setUniform("object_color", glm::dvec4{r / 255.0, g / 255.0, b / 255.0, 1.0});
+            }
 
             CALL_OPEN_GL(::glBindVertexArray(vao.object));
             if constexpr (has_ebo) {
@@ -373,209 +466,368 @@ private:
                 CALL_OPEN_GL(::glDrawArrays(static_cast<GLenum>(vao.mode), 0, vao.count));
             }
 
-            if constexpr (has_texture) { glBindTexture(GL_TEXTURE_2D, 0); }
+            if constexpr (!is_pickable && has_texture) { CALL_OPEN_GL(glBindTexture(GL_TEXTURE_2D, 0)); }
         };
 
-        // note : it should be a better way..
-        // todo create a matrix of callback templated somthing something
+        const auto render_all = [ this, &render ]<typename... With>(const CameraData &cam)
+        {
+            constexpr auto is_pickable = sizeof...(With) != 0;
 
-        // without texture
+            // note : it should be a better way..
+            // todo create a matrix of callback templated somthing something
 
-        // without ebo
+            // without texture
+            // without ebo
 
-        world.view<Render::VAO>(entt::exclude<Render::EBO, Position3f, Rotation3f, Scale3f, Texture2D>)
-            .each([&render](const auto &vao) {
-                render.operator()<false, false>(
-                    vao,
-                    {Position3f::default_value},
-                    {Rotation3f::default_value},
-                    {Scale3f::default_value},
-                    Texture2D::empty);
-            });
+            for (const entt::entity &e : world.view<Render::VAO, With...>(
+                     entt::exclude<Render::EBO, Position3f, Rotation3f, Scale3f, Texture2D>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                render.operator()<false, false, is_pickable>(
+                    cam, e, vao, Position3f{}, Rotation3f{}, Scale3f{}, Texture2D::empty);
+            }
 
-        world.view<Render::VAO, Position3f>(entt::exclude<Render::EBO, Rotation3f, Scale3f, Texture2D>)
-            .each([&render](const auto &vao, const auto &pos) {
-                render.operator()<false, false>(
-                    vao, pos, {Rotation3f::default_value}, {Scale3f::default_value}, Texture2D::empty);
-            });
+            for (const entt::entity &e : world.view<Render::VAO, Position3f, With...>(
+                     entt::exclude<Render::EBO, Rotation3f, Scale3f, Texture2D>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &pos = world.get<Position3f>(e);
+                render.operator()<false, false, is_pickable>(
+                    cam, e, vao, pos, Rotation3f{}, Scale3f{}, Texture2D::empty);
+            }
 
-        world.view<Render::VAO, Rotation3f>(entt::exclude<Render::EBO, Position3f, Scale3f, Texture2D>)
-            .each([&render](const auto &vao, const auto &rot) {
-                render.operator()<false, false>(
-                    vao, {Position3f::default_value}, rot, {Scale3f::default_value}, Texture2D::empty);
-            });
+            for (const entt::entity &e : world.view<Render::VAO, Rotation3f, With...>(
+                     entt::exclude<Render::EBO, Position3f, Scale3f, Texture2D>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &rot = world.get<Rotation3f>(e);
+                render.operator()<false, false, is_pickable>(
+                    cam, e, vao, Position3f{}, rot, Scale3f{}, Texture2D::empty);
+            }
 
-        world.view<Render::VAO, Scale3f>(entt::exclude<Render::EBO, Position3f, Rotation3f, Texture2D>)
-            .each([&render](const auto &vao, const auto &scale) {
-                render.operator()<false, false>(
-                    vao, {Position3f::default_value}, {Rotation3f::default_value}, scale, Texture2D::empty);
-            });
+            for (const entt::entity &e : world.view<Render::VAO, Scale3f, With...>(
+                     entt::exclude<Render::EBO, Position3f, Rotation3f, Texture2D>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &scale = world.get<Scale3f>(e);
+                render.operator()<false, false, is_pickable>(
+                    cam, e, vao, Position3f{}, Rotation3f{}, scale, Texture2D::empty);
+            }
 
-        world.view<Render::VAO, Position3f, Scale3f>(entt::exclude<Render::EBO, Rotation3f, Texture2D>)
-            .each([&render](const auto &vao, const auto &pos, const auto &scale) {
-                render.operator()<false, false>(vao, pos, {Rotation3f::default_value}, scale, Texture2D::empty);
-            });
+            for (const entt::entity &e : world.view<Render::VAO, Position3f, Scale3f, With...>(
+                     entt::exclude<Render::EBO, Rotation3f, Texture2D>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &pos = world.get<Position3f>(e);
+                const auto &scale = world.get<Scale3f>(e);
+                render.operator()<false, false, is_pickable>(
+                    cam, e, vao, pos, Rotation3f{}, scale, Texture2D::empty);
+            }
 
-        world.view<Render::VAO, Rotation3f, Scale3f>(entt::exclude<Render::EBO, Position3f, Texture2D>)
-            .each([&render](const auto &vao, const auto &rot, const auto &scale) {
-                render.operator()<false, false>(vao, {Position3f::default_value}, rot, scale, Texture2D::empty);
-            });
+            for (const entt::entity &e : world.view<Render::VAO, Rotation3f, Scale3f, With...>(
+                     entt::exclude<Render::EBO, Position3f, Texture2D>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &scale = world.get<Scale3f>(e);
+                const auto &rot = world.get<Rotation3f>(e);
+                render.operator()<false, false, is_pickable>(
+                    cam, e, vao, Position3f{}, rot, scale, Texture2D::empty);
+            }
 
-        world.view<Render::VAO, Position3f, Rotation3f>(entt::exclude<Render::EBO, Scale3f, Texture2D>)
-            .each([&render](const auto &vao, const auto &pos, const auto &rot) {
-                render.operator()<false, false>(vao, pos, rot, {Scale3f::default_value}, Texture2D::empty);
-            });
+            for (const entt::entity &e : world.view<Render::VAO, Position3f, Rotation3f, With...>(
+                     entt::exclude<Render::EBO, Scale3f, Texture2D>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &pos = world.get<Position3f>(e);
+                const auto &rot = world.get<Rotation3f>(e);
+                render.operator()<false, false, is_pickable>(cam, e, vao, pos, rot, Scale3f{}, Texture2D::empty);
+            }
 
-        world.view<Render::VAO, Position3f, Rotation3f, Scale3f>(entt::exclude<Render::EBO, Texture2D>)
-            .each([&render](const auto &vao, const auto &pos, const auto &rot, const auto &scale) {
-                render.operator()<false, false>(vao, pos, rot, scale, Texture2D::empty);
-            });
+            for (const entt::entity &e : world.view<Render::VAO, Position3f, Rotation3f, Scale3f, With...>(
+                     entt::exclude<Render::EBO, Texture2D>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &pos = world.get<Position3f>(e);
+                const auto &scale = world.get<Scale3f>(e);
+                const auto &rot = world.get<Rotation3f>(e);
+                render.operator()<false, false, is_pickable>(cam, e, vao, pos, rot, scale, Texture2D::empty);
+            }
 
-        // with ebo
+            // with ebo
 
-        world.view<Render::EBO, Render::VAO>(entt::exclude<Position3f, Rotation3f, Scale3f, Texture2D>)
-            .each([&render](const auto &, const auto &vao) {
-                render.operator()<true, false>(
-                    vao,
-                    {Position3f::default_value},
-                    {Rotation3f::default_value},
-                    {Scale3f::default_value},
-                    Texture2D::empty);
-            });
+            for (const entt::entity &e : world.view<Render::EBO, Render::VAO, With...>(
+                     entt::exclude<Position3f, Rotation3f, Scale3f, Texture2D>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                render.operator()<true, false, is_pickable>(
+                    cam, e, vao, Position3f{}, Rotation3f{}, Scale3f{}, Texture2D::empty);
+            }
 
-        world.view<Render::EBO, Render::VAO, Position3f>(entt::exclude<Rotation3f, Scale3f, Texture2D>)
-            .each([&render](const auto &, const auto &vao, const auto &pos) {
-                render.operator()<true, false>(
-                    vao, pos, {Rotation3f::default_value}, {Scale3f::default_value}, Texture2D::empty);
-            });
+            for (const entt::entity &e : world.view<Render::EBO, Render::VAO, Position3f, With...>(
+                     entt::exclude<Rotation3f, Scale3f, Texture2D>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &pos = world.get<Position3f>(e);
+                render.operator()<true, false, is_pickable>(
+                    cam, e, vao, pos, Rotation3f{}, Scale3f{}, Texture2D::empty);
+            }
 
-        world.view<Render::EBO, Render::VAO, Rotation3f>(entt::exclude<Position3f, Scale3f, Texture2D>)
-            .each([&render](const auto &, const auto &vao, const auto &rot) {
-                render.operator()<true, false>(
-                    vao, {Position3f::default_value}, rot, {Scale3f::default_value}, Texture2D::empty);
-            });
+            for (const entt::entity &e : world.view<Render::EBO, Render::VAO, Rotation3f, With...>(
+                     entt::exclude<Position3f, Scale3f, Texture2D>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &rot = world.get<Rotation3f>(e);
+                render.operator()<true, false, is_pickable>(
+                    cam, e, vao, Position3f{}, rot, Scale3f{}, Texture2D::empty);
+            }
 
-        world.view<Render::EBO, Render::VAO, Scale3f>(entt::exclude<Position3f, Rotation3f, Texture2D>)
-            .each([&render](const auto &, const auto &vao, const auto &scale) {
-                render.operator()<true, false>(
-                    vao, {Position3f::default_value}, {Rotation3f::default_value}, scale, Texture2D::empty);
-            });
+            for (const entt::entity &e : world.view<Render::EBO, Render::VAO, Scale3f, With...>(
+                     entt::exclude<Position3f, Rotation3f, Texture2D>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &scale = world.get<Scale3f>(e);
+                render.operator()<true, false, is_pickable>(
+                    cam, e, vao, Position3f{}, Rotation3f{}, scale, Texture2D::empty);
+            }
 
-        world.view<Render::EBO, Render::VAO, Position3f, Scale3f>(entt::exclude<Rotation3f, Texture2D>)
-            .each([&render](const auto &, const auto &vao, const auto &pos, const auto &scale) {
-                render.operator()<true, false>(vao, pos, {Rotation3f::default_value}, scale, Texture2D::empty);
-            });
+            for (const entt::entity &e : world.view<Render::EBO, Render::VAO, Position3f, Scale3f, With...>(
+                     entt::exclude<Rotation3f, Texture2D>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &pos = world.get<Position3f>(e);
+                const auto &scale = world.get<Scale3f>(e);
+                render.operator()<true, false, is_pickable>(
+                    cam, e, vao, pos, Rotation3f{}, scale, Texture2D::empty);
+            }
 
-        world.view<Render::EBO, Render::VAO, Rotation3f, Scale3f>(entt::exclude<Position3f, Texture2D>)
-            .each([&render](const auto &, const auto &vao, const auto &rot, const auto &scale) {
-                render.operator()<true, false>(vao, {Position3f::default_value}, rot, scale, Texture2D::empty);
-            });
+            for (const entt::entity &e : world.view<Render::EBO, Render::VAO, Rotation3f, Scale3f, With...>(
+                     entt::exclude<Position3f, Texture2D>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &scale = world.get<Scale3f>(e);
+                const auto &rot = world.get<Rotation3f>(e);
+                render.operator()<true, false, is_pickable>(
+                    cam, e, vao, Position3f{}, rot, scale, Texture2D::empty);
+            }
 
-        world.view<Render::EBO, Render::VAO, Position3f, Rotation3f>(entt::exclude<Scale3f, Texture2D>)
-            .each([&render](const auto &, const auto &vao, const auto &pos, const auto &rot) {
-                render.operator()<true, false>(vao, pos, rot, {Scale3f::default_value}, Texture2D::empty);
-            });
+            for (const entt::entity &e : world.view<Render::EBO, Render::VAO, Position3f, Rotation3f, With...>(
+                     entt::exclude<Scale3f, Texture2D>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &pos = world.get<Position3f>(e);
+                const auto &rot = world.get<Rotation3f>(e);
+                render.operator()<true, false, is_pickable>(cam, e, vao, pos, rot, Scale3f{}, Texture2D::empty);
+            }
 
-        world.view<Render::EBO, Render::VAO, Position3f, Rotation3f, Scale3f>(entt::exclude<Texture2D>)
-            .each([&render](const auto &, const auto &vao, const auto &pos, const auto &rot, const auto &scale) {
-                render.operator()<true, false>(vao, pos, rot, scale, Texture2D::empty);
-            });
+            for (const entt::entity &e :
+                 world.view<Render::EBO, Render::VAO, Position3f, Rotation3f, Scale3f, With...>(
+                     entt::exclude<Texture2D>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &pos = world.get<Position3f>(e);
+                const auto &scale = world.get<Scale3f>(e);
+                const auto &rot = world.get<Rotation3f>(e);
+                render.operator()<true, false, is_pickable>(cam, e, vao, pos, rot, scale, Texture2D::empty);
+            }
 
-        // with texture
+            // with texture
+            // without ebo
 
-        // without ebo
+            for (const auto &e : world.view<With..., Render::VAO, Texture2D>(
+                     entt::exclude<Render::EBO, Position3f, Rotation3f, Scale3f>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &texture = world.get<Texture2D>(e);
+                render.operator()<false, true, is_pickable>(
+                    cam, e, vao, Position3f{}, Rotation3f{}, Scale3f{}, texture);
+            }
 
-        world.view<Render::VAO, Texture2D>(entt::exclude<Render::EBO, Position3f, Rotation3f, Scale3f>)
-            .each([&render](const auto &vao, const auto &texture) {
-                render.operator()<false, true>(
-                    vao, {Position3f::default_value}, {Rotation3f::default_value}, {Scale3f::default_value}, texture);
-            });
+            for (const auto &e : world.view<With..., Render::VAO, Position3f, Texture2D>(
+                     entt::exclude<Render::EBO, Rotation3f, Scale3f>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &pos = world.get<Position3f>(e);
+                const auto &texture = world.get<Texture2D>(e);
+                render.operator()<false, true, is_pickable>(cam, e, vao, pos, Rotation3f{}, Scale3f{}, texture);
+            }
 
-        world.view<Render::VAO, Position3f, Texture2D>(entt::exclude<Render::EBO, Rotation3f, Scale3f>)
-            .each([&render](const auto &vao, const auto &pos, const auto &texture) {
-                render.operator()<false, true>(
-                    vao, pos, {Rotation3f::default_value}, {Scale3f::default_value}, texture);
-            });
+            for (const auto &e : world.view<With..., Render::VAO, Rotation3f, Texture2D>(
+                     entt::exclude<Render::EBO, Position3f, Scale3f>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &rot = world.get<Rotation3f>(e);
+                const auto &texture = world.get<Texture2D>(e);
+                render.operator()<false, true, is_pickable>(cam, e, vao, Position3f{}, rot, Scale3f{}, texture);
+            }
 
-        world.view<Render::VAO, Rotation3f, Texture2D>(entt::exclude<Render::EBO, Position3f, Scale3f>)
-            .each([&render](const auto &vao, const auto &rot, const auto &texture) {
-                render.operator()<false, true>(
-                    vao, {Position3f::default_value}, rot, {Scale3f::default_value}, texture);
-            });
+            for (const auto &e : world.view<With..., Render::VAO, Scale3f, Texture2D>(
+                     entt::exclude<Render::EBO, Position3f, Rotation3f>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &scale = world.get<Scale3f>(e);
+                const auto &texture = world.get<Texture2D>(e);
+                render.operator()<false, true, is_pickable>(
+                    cam, e, vao, Position3f{}, Rotation3f{}, scale, texture);
+            }
 
-        world.view<Render::VAO, Scale3f, Texture2D>(entt::exclude<Render::EBO, Position3f, Rotation3f>)
-            .each([&render](const auto &vao, const auto &scale, const auto &texture) {
-                render.operator()<false, true>(
-                    vao, {Position3f::default_value}, {Rotation3f::default_value}, scale, texture);
-            });
+            for (const auto &e : world.view<With..., Render::VAO, Position3f, Scale3f, Texture2D>(
+                     entt::exclude<Render::EBO, Rotation3f>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &pos = world.get<Position3f>(e);
+                const auto &scale = world.get<Scale3f>(e);
+                const auto &texture = world.get<Texture2D>(e);
+                render.operator()<false, true, is_pickable>(cam, e, vao, pos, Rotation3f{}, scale, texture);
+            }
 
-        world.view<Render::VAO, Position3f, Scale3f, Texture2D>(entt::exclude<Render::EBO, Rotation3f>)
-            .each([&render](const auto &vao, const auto &pos, const auto &scale, const auto &texture) {
-                render.operator()<false, true>(vao, pos, {Rotation3f::default_value}, scale, texture);
-            });
+            for (const auto &e : world.view<With..., Render::VAO, Rotation3f, Scale3f, Texture2D>(
+                     entt::exclude<Render::EBO, Position3f>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &scale = world.get<Scale3f>(e);
+                const auto &rot = world.get<Rotation3f>(e);
+                const auto &texture = world.get<Texture2D>(e);
+                render.operator()<false, true, is_pickable>(cam, e, vao, Position3f{}, rot, scale, texture);
+            }
 
-        world.view<Render::VAO, Rotation3f, Scale3f, Texture2D>(entt::exclude<Render::EBO, Position3f>)
-            .each([&render](const auto &vao, const auto &rot, const auto &scale, const auto &texture) {
-                render.operator()<false, true>(vao, {Position3f::default_value}, rot, scale, texture);
-            });
+            for (const auto &e : world.view<With..., Render::VAO, Position3f, Rotation3f, Texture2D>(
+                     entt::exclude<Render::EBO, Scale3f>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &pos = world.get<Position3f>(e);
+                const auto &rot = world.get<Rotation3f>(e);
+                const auto &texture = world.get<Texture2D>(e);
+                render.operator()<false, true, is_pickable>(cam, e, vao, pos, rot, Scale3f{}, texture);
+            }
 
-        world.view<Render::VAO, Position3f, Rotation3f, Texture2D>(entt::exclude<Render::EBO, Scale3f>)
-            .each([&render](const auto &vao, const auto &pos, const auto &rot, const auto &texture) {
-                render.operator()<false, true>(vao, pos, rot, {Scale3f::default_value}, texture);
-            });
+            for (const auto &e : world.view<With..., Render::VAO, Position3f, Rotation3f, Scale3f, Texture2D>(
+                     entt::exclude<Render::EBO>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &pos = world.get<Position3f>(e);
+                const auto &scale = world.get<Scale3f>(e);
+                const auto &rot = world.get<Rotation3f>(e);
+                const auto &texture = world.get<Texture2D>(e);
+                render.operator()<false, true, is_pickable>(cam, e, vao, pos, rot, scale, texture);
+            }
 
-        world.view<Render::VAO, Position3f, Rotation3f, Scale3f, Texture2D>(entt::exclude<Render::EBO>)
-            .each([&render](const auto &vao, const auto &pos, const auto &rot, const auto &scale, const auto &texture) {
-                render.operator()<false, true>(vao, pos, rot, scale, texture);
-            });
+            // with ebo
 
-        // with ebo
+            for (const auto &e : world.view<With..., Render::EBO, Render::VAO, Texture2D>(
+                     entt::exclude<Position3f, Rotation3f, Scale3f>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &texture = world.get<Texture2D>(e);
+                render.operator()<true, true, is_pickable>(
+                    cam, e, vao, Position3f{}, Rotation3f{}, Scale3f{}, texture);
+            }
 
-        world.view<Render::EBO, Render::VAO, Texture2D>(entt::exclude<Position3f, Rotation3f, Scale3f>)
-            .each([&render](const auto &, const auto &vao, const auto &texture) {
-                render.operator()<true, true>(
-                    vao, {Position3f::default_value}, {Rotation3f::default_value}, {Scale3f::default_value}, texture);
-            });
+            for (const auto &e : world.view<With..., Render::EBO, Render::VAO, Position3f, Texture2D>(
+                     entt::exclude<Rotation3f, Scale3f>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &pos = world.get<Position3f>(e);
+                const auto &texture = world.get<Texture2D>(e);
+                render.operator()<true, true, is_pickable>(cam, e, vao, pos, Rotation3f{}, Scale3f{}, texture);
+            }
 
-        world.view<Render::EBO, Render::VAO, Position3f, Texture2D>(entt::exclude<Rotation3f, Scale3f>)
-            .each([&render](const auto &, const auto &vao, const auto &pos, const auto &texture) {
-                render.operator()<true, true>(
-                    vao, pos, {Rotation3f::default_value}, {Scale3f::default_value}, texture);
-            });
+            for (const auto &e : world.view<With..., Render::EBO, Render::VAO, Rotation3f, Texture2D>(
+                     entt::exclude<Position3f, Scale3f>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &rot = world.get<Rotation3f>(e);
+                const auto &texture = world.get<Texture2D>(e);
+                render.operator()<true, true, is_pickable>(cam, e, vao, Position3f{}, rot, Scale3f{}, texture);
+            }
 
-        world.view<Render::EBO, Render::VAO, Rotation3f, Texture2D>(entt::exclude<Position3f, Scale3f>)
-            .each([&render](const auto &, const auto &vao, const auto &rot, const auto &texture) {
-                render.operator()<true, true>(
-                    vao, {Position3f::default_value}, rot, {Scale3f::default_value}, texture);
-            });
+            for (const auto &e : world.view<With..., Render::EBO, Render::VAO, Scale3f, Texture2D>(
+                     entt::exclude<Position3f, Rotation3f>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &scale = world.get<Scale3f>(e);
+                const auto &texture = world.get<Texture2D>(e);
+                render.operator()<true, true, is_pickable>(
+                    cam, e, vao, Position3f{}, Rotation3f{}, scale, texture);
+            }
 
-        world.view<Render::EBO, Render::VAO, Scale3f, Texture2D>(entt::exclude<Position3f, Rotation3f>)
-            .each([&render](const auto &, const auto &vao, const auto &scale, const auto &texture) {
-                render.operator()<true, true>(
-                    vao, {Position3f::default_value}, {Rotation3f::default_value}, scale, texture);
-            });
+            for (const auto &e : world.view<With..., Render::EBO, Render::VAO, Position3f, Scale3f, Texture2D>(
+                     entt::exclude<Rotation3f>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &pos = world.get<Position3f>(e);
+                const auto &scale = world.get<Scale3f>(e);
+                const auto &texture = world.get<Texture2D>(e);
+                render.operator()<true, true, is_pickable>(cam, e, vao, pos, Rotation3f{}, scale, texture);
+            }
 
-        world.view<Render::EBO, Render::VAO, Position3f, Scale3f, Texture2D>(entt::exclude<Rotation3f>)
-            .each([&render](const auto &, const auto &vao, const auto &pos, const auto &scale, const auto &texture) {
-                render.operator()<true, true>(vao, pos, {Rotation3f::default_value}, scale, texture);
-            });
+            for (const auto &e : world.view<With..., Render::EBO, Render::VAO, Rotation3f, Scale3f, Texture2D>(
+                     entt::exclude<Position3f>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &scale = world.get<Scale3f>(e);
+                const auto &rot = world.get<Rotation3f>(e);
+                const auto &texture = world.get<Texture2D>(e);
+                render.operator()<true, true, is_pickable>(cam, e, vao, Position3f{}, rot, scale, texture);
+            }
 
-        world.view<Render::EBO, Render::VAO, Rotation3f, Scale3f, Texture2D>(entt::exclude<Position3f>)
-            .each([&render](const auto &, const auto &vao, const auto &rot, const auto &scale, const auto &texture) {
-                render.operator()<true, true>(vao, {Position3f::default_value}, rot, scale, texture);
-            });
+            for (const auto &e : world.view<With..., Render::EBO, Render::VAO, Position3f, Rotation3f, Texture2D>(
+                     entt::exclude<Scale3f>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &pos = world.get<Position3f>(e);
+                const auto &rot = world.get<Rotation3f>(e);
+                const auto &texture = world.get<Texture2D>(e);
+                render.operator()<true, true, is_pickable>(cam, e, vao, pos, rot, Scale3f{}, texture);
+            }
 
-        world.view<Render::EBO, Render::VAO, Position3f, Rotation3f, Texture2D>(entt::exclude<Scale3f>)
-            .each([&render](const auto &, const auto &vao, const auto &pos, const auto &rot, const auto &texture) {
-                render.operator()<true, true>(vao, pos, rot, {Scale3f::default_value}, texture);
-            });
+            for (const auto &e :
+                 world.view<With..., Render::EBO, Render::VAO, Position3f, Rotation3f, Scale3f, Texture2D>(
+                     entt::exclude<>)) {
+                const auto &vao = world.get<Render::VAO>(e);
+                const auto &pos = world.get<Position3f>(e);
+                const auto &scale = world.get<Scale3f>(e);
+                const auto &rot = world.get<Rotation3f>(e);
+                const auto &texture = world.get<Texture2D>(e);
+                render.operator()<true, true, is_pickable>(cam, e, vao, pos, rot, scale, texture);
+            }
+        };
 
-        world.view<Render::EBO, Render::VAO, Position3f, Rotation3f, Scale3f, Texture2D>().each(
-            [&render](
-                const auto &, const auto &vao, const auto &pos, const auto &rot, const auto &scale, const auto &texture) {
-                render.operator()<true, true>(vao, pos, rot, scale, texture);
-            });
+        if (state->state_mouse_button[MouseButton::Button::BUTTON_LEFT]
+            && !ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) {
+            const auto &list_pickable = world.view<Pickable, Render::VAO>();
+            if (list_pickable.size_hint() != 0) {
+                glClearColor(1, 1, 1, 1);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+                for (auto &i : world.view<CameraData>()) {
+                    const auto &camera = world.get<CameraData>(i);
+                    const auto &cam_viewport = camera.viewport;
+                    const auto window_size = window->getSize<float>();
+                    GLint viewport[4] = {
+                        static_cast<GLint>(cam_viewport.x * window_size.x),
+                        static_cast<GLint>(cam_viewport.y * window_size.y),
+                        static_cast<GLsizei>(cam_viewport.w * window_size.x),
+                        static_cast<GLsizei>(cam_viewport.h * window_size.y)};
+                    ::glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+
+                    render_all.operator()<Pickable>(camera);
+                }
+                // note : is it required ?
+                glFlush();
+                glFinish();
+
+                glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+                std::array<std::uint8_t, 4> data{0, 0, 0, 0};
+                glReadPixels(
+                    static_cast<GLint>(state->mouse_pos_when_pressed.x),
+                    static_cast<GLint>(state->mouse_pos_when_pressed.y),
+                    1,
+                    1,
+                    GL_RGBA,
+                    GL_UNSIGNED_BYTE,
+                    data.data());
+
+                const int pickedID = data[0] + data[1] * 256 + data[2] * 256 * 256;
+                spdlog::debug("pick = {}", pickedID);
+                if (pickedID == 0x00ffffff || !world.valid(static_cast<entt::entity>(pickedID))) {
+                    component_inspector.selected = {};
+                } else {
+                    component_inspector.selected = static_cast<entt::entity>(pickedID);
+                }
+
+                // todo : send a signal to the app ?
+            }
+        }
+        glClearColor(state->clear_color.r, state->clear_color.g, state->clear_color.b, state->clear_color.a);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        for (auto &i : world.view<CameraData>()) {
+            const auto &camera = world.get<CameraData>(i);
+            // todo : when resizing the window, the object deform
+            // this doesn t sound kind right ...
+            const auto cam_viewport = camera.viewport;
+            const auto window_size = window->getSize<float>();
+            GLint viewport[4] = {
+                static_cast<GLint>(cam_viewport.x * window_size.x),
+                static_cast<GLint>(cam_viewport.y * window_size.y),
+                static_cast<GLsizei>(cam_viewport.w * window_size.x),
+                static_cast<GLsizei>(cam_viewport.h * window_size.y)};
+            ::glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+
+            render_all(camera);
+        }
     }
+
 }; // namespace kawe
 
 } // namespace kawe
