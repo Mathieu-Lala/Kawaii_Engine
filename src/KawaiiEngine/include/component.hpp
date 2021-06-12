@@ -514,11 +514,18 @@ struct Clock {
     )
         -> Clock &
     {
-        Clock clock{ callback, refresh_rate, std::chrono::milliseconds::zero() };
+        Clock clock {
+          .callback = callback,
+          .refresh_rate = refresh_rate,
+          .current = std::chrono::milliseconds::zero()
+        };
 
-        world.ctx<entt::dispatcher *>()->sink<kawe::TimeElapsed>().connect<&Clock::on_update>(clock);
+        world.emplace<Clock>(entity, clock);
 
-        return world.emplace<Clock>(entity, clock);
+        world.ctx<entt::dispatcher *>()->sink<kawe::TimeElapsed>()
+          .connect<&Clock::on_update>(world.get<Clock>(entity));
+
+        return world.get<Clock>(entity);
     }
 
     auto on_update(const kawe::TimeElapsed &e) -> void
