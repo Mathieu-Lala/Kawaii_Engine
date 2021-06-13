@@ -502,27 +502,21 @@ struct Clock {
     std::chrono::milliseconds refresh_rate;
     std::chrono::milliseconds current;
 
-    static auto
-    emplace(
+    static auto emplace(
         entt::registry &world,
         const entt::entity &entity,
         const std::chrono::milliseconds &refresh_rate,
-        const std::function<void(void)> &callback
-    )
-        -> Clock &
+        const std::function<void(void)> &callback) -> Clock &
     {
-        Clock clock {
-          .callback = callback,
-          .refresh_rate = refresh_rate,
-          .current = std::chrono::milliseconds::zero()
-        };
+        Clock clock{
+            .callback = callback, .refresh_rate = refresh_rate, .current = std::chrono::milliseconds::zero()};
 
-        world.emplace<Clock>(entity, clock);
+        auto &emplaced_clock = world.emplace<Clock>(entity, clock);
 
-        world.ctx<entt::dispatcher *>()->sink<kawe::TimeElapsed>()
-          .connect<&Clock::on_update>(world.get<Clock>(entity));
+        world.ctx<entt::dispatcher *>()->sink<kawe::TimeElapsed>().connect<&Clock::on_update>(
+            emplaced_clock);
 
-        return world.get<Clock>(entity);
+        return emplaced_clock;
     }
 
     auto on_update(const kawe::TimeElapsed &e) -> void
@@ -574,11 +568,7 @@ struct CameraData {
             const auto sinAng = std::sin(angle / 2.0);
             const auto norm = std::sqrt(axis.x * axis.x + axis.y * axis.y + axis.z * axis.z);
 
-            return {
-                sinAng * axis.x / norm,
-                sinAng * axis.y / norm,
-                sinAng * axis.z / norm,
-                cosAng};
+            return {sinAng * axis.x / norm, sinAng * axis.y / norm, sinAng * axis.z / norm, cosAng};
         };
 
         const auto horizRot = setFromAxisAngle(cam.imagePlaneHorizDir, DEFAULT_ROTATE_SPEED * amount.y);
