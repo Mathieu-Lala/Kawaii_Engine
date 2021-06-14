@@ -2,3 +2,11 @@
 	path = dependencies/ImGuiFileDialog
 	url = https://github.com/aiekick/ImGuiFileDialog.git
 	branch = Lib_Only
+[submodule "dependencies/imguiDock"]
+	path = dependencies/imguiDock
+	url = https://github.com/BentleyBlanks/imguiDock.git
+	branch = master
+[submodule "dependencies/imgui"]
+	path = dependencies/imgui
+	url = https://github.com/ocornut/imgui.git
+	branch = docking

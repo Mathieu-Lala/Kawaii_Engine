@@ -1,13 +1,3 @@
-add_library(glfw_imgui_opengl3 STATIC ${CONAN_RES_DIRS_IMGUI}/bindings/imgui_impl_glfw.cpp
-                                      ${CONAN_RES_DIRS_IMGUI}/bindings/imgui_impl_opengl3.cpp)
-target_link_libraries(glfw_imgui_opengl3 PUBLIC project_options CONAN_PKG::glfw CONAN_PKG::imgui CONAN_PKG::glew)
-target_include_directories(glfw_imgui_opengl3 PUBLIC ${CONAN_RES_DIRS_IMGUI}/bindings)
-target_compile_definitions(glfw_imgui_opengl3 PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLEW)
-
-add_library(ImGuiFileDialog STATIC ../../dependencies/ImGuiFileDialog/ImGuiFileDialog.cpp)
-target_link_libraries(ImGuiFileDialog PUBLIC project_options glfw_imgui_opengl3)
-target_include_directories(ImGuiFileDialog PUBLIC ../../dependencies/ImGuiFileDialog)
-
 add_library(kawaii_engine STATIC src/graphics/Window.cpp src/graphics/Shader.cpp src/EventProvider.cpp
                                  src/widgets/ComponentInspector.cpp src/resources/ResourceLoader.cpp src/Component.cpp)
 
