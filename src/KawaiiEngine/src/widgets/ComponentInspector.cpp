@@ -513,7 +513,7 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt:
 
 auto kawe::ComponentInspector::draw(entt::registry &world) -> void
 {
-    ImGui::Begin("KAWE: Component Inspector");
+    if (!ImGui::Begin("KAWE: Component Inspector")) return;
 
     ImGui::BeginChild("item view", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()));
     ImGui::Text(

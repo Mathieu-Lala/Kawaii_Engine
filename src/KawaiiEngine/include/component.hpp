@@ -513,13 +513,12 @@ struct Clock {
 
         auto &emplaced_clock = world.emplace<Clock>(entity, clock);
 
-        world.ctx<entt::dispatcher *>()->sink<kawe::TimeElapsed>().connect<&Clock::on_update>(
-            emplaced_clock);
+        world.ctx<entt::dispatcher *>()->sink<kawe::event::TimeElapsed>().connect<&Clock::on_update>(emplaced_clock);
 
         return emplaced_clock;
     }
 
-    auto on_update(const kawe::TimeElapsed &e) -> void
+    auto on_update(const kawe::event::TimeElapsed &e) -> void
     {
         current += std::chrono::duration_cast<std::chrono::milliseconds>(e.elapsed);
 

@@ -9,6 +9,8 @@
 
 namespace kawe {
 
+namespace event {
+
 // Event Helper
 
 template<typename Source>
@@ -28,8 +30,10 @@ struct Released {
 template<typename Source>
 struct Moved {
     constexpr static std::string_view name{"Moved"};
-    constexpr static std::array elements{std::string_view{"source"}};
+    constexpr static std::array elements{std::string_view{"source"}, std::string_view{"x"}, std::string_view{"y"}};
     Source source;
+    double x;
+    double y;
 };
 
 template<typename Source>
@@ -50,6 +54,13 @@ struct Disconnected {
 
 /// Window Related
 
+struct Window {
+    constexpr static std::string_view name{"CloseWindow"};
+    constexpr static auto elements = std::to_array<std::string_view>({"id"});
+    int id;
+};
+
+/*
 struct CloseWindow { // note : should be Disonnected<Window>
     constexpr static std::string_view name{"CloseWindow"};
     constexpr static std::array<std::string_view, 0> elements{};
@@ -59,6 +70,7 @@ struct OpenWindow { // note : should be Connected<Window>
     constexpr static std::string_view name{"OpenWindow"};
     constexpr static std::array<std::string_view, 0> elements{};
 };
+*/
 
 struct ResizeWindow {
     constexpr static std::string_view name{"ResizeWindow"};
@@ -66,14 +78,14 @@ struct ResizeWindow {
     int width;
     int height;
 };
-
+/*
 struct MoveWindow { // note : could use Moved<Window> ?
     constexpr static std::string_view name{"MoveWindow"};
     constexpr static auto elements = std::to_array<std::string_view>({"x", "y"});
     int x;
     int y;
 };
-
+*/
 struct TimeElapsed {
     constexpr static std::string_view name{"TimeElapsed"};
     constexpr static std::array elements{std::string_view{"elapsed"}};
@@ -227,9 +239,7 @@ struct Key {
 
 struct Mouse {
     constexpr static std::string_view name{"Mouse"};
-    constexpr static auto elements = std::to_array<std::string_view>({"x", "y"});
-    double x;
-    double y;
+    constexpr static std::array<std::string_view, 0> elements{};
 };
 
 struct MouseButton {
@@ -343,10 +353,10 @@ struct JoystickButton {
 using Event = std::variant<
     std::monostate,
 
-    OpenWindow,
-    CloseWindow,
+    Connected<Window>,
+    Disconnected<Window>,
+    Moved<Window>,
     ResizeWindow,
-    MoveWindow,
 
     TimeElapsed,
 
@@ -366,5 +376,7 @@ using Event = std::variant<
     Moved<JoystickAxis>
 
     >;
+
+} // namespace event
 
 } // namespace kawe

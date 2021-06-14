@@ -32,35 +32,35 @@ kawe::Window::Window(
 }
 
 template<>
-auto kawe::Window::useEvent(const Pressed<MouseButton> &m) -> void
+auto kawe::Window::useEvent(const event::Pressed<event::MouseButton> &m) -> void
 {
     ::ImGui_ImplGlfw_MouseButtonCallback(
         window, magic_enum::enum_integer(m.source.button), GLFW_PRESS, 0 /* todo */);
 }
 
 template<>
-auto kawe::Window::useEvent(const Released<MouseButton> &m) -> void
+auto kawe::Window::useEvent(const event::Released<event::MouseButton> &m) -> void
 {
     ::ImGui_ImplGlfw_MouseButtonCallback(
         window, magic_enum::enum_integer(m.source.button), GLFW_RELEASE, 0 /* todo */);
 }
 
 template<>
-auto kawe::Window::useEvent(const Pressed<Key> &k) -> void
+auto kawe::Window::useEvent(const event::Pressed<event::Key> &k) -> void
 {
     ::ImGui_ImplGlfw_KeyCallback(
         window, static_cast<int>(k.source.keycode), k.source.scancode, GLFW_PRESS, 0 /* todo */);
 }
 
 template<>
-auto kawe::Window::useEvent(const Released<Key> &k) -> void
+auto kawe::Window::useEvent(const event::Released<event::Key> &k) -> void
 {
     ::ImGui_ImplGlfw_KeyCallback(
         window, static_cast<int>(k.source.keycode), k.source.scancode, GLFW_RELEASE, 0 /* todo */);
 }
 
 template<>
-auto kawe::Window::useEvent(const Character &character) -> void
+auto kawe::Window::useEvent(const event::Character &character) -> void
 {
     ::ImGui_ImplGlfw_CharCallback(window, character.codepoint);
 }

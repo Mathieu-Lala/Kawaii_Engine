@@ -29,17 +29,17 @@ auto kawe::EventProvider::assign(const Window &window) -> void
     // glfwSetWindowFocusCallback(window, window_focus_handler);
     // glfwSetErrorCallback(error_handler);
 
-    m_buffer_events.emplace_back(OpenWindow{});
-    m_events_processed.emplace_back(TimeElapsed{});
+    m_buffer_events.emplace_back(event::Connected<event::Window>{});
+    m_events_processed.emplace_back(event::TimeElapsed{});
 }
 
-auto kawe::EventProvider::getNextEvent() -> Event
+auto kawe::EventProvider::getNextEvent() -> event::Event
 {
     const auto event = fetchEvent();
 
     std::visit(
         overloaded{
-            [](TimeElapsed &prev, const TimeElapsed &next) { prev.elapsed += next.elapsed; },
+            [](event::TimeElapsed &prev, const event::TimeElapsed &next) { prev.elapsed += next.elapsed; },
             [&](const auto &, const std::monostate &) {},
             [&](const auto &, const auto &next) { m_events_processed.push_back(next); }},
         m_events_processed.back(),
@@ -48,17 +48,21 @@ auto kawe::EventProvider::getNextEvent() -> Event
     return event;
 }
 
-auto kawe::EventProvider::getLastEvent() const noexcept -> const Event &
+auto kawe::EventProvider::getLastEventWhere(const std::function<bool(const event::Event &)> &predicate) const noexcept
+    -> const event::Event &
 {
     // todo : replace this this something like std::find_last_where
-    for (auto i = m_events_processed.size(); i; i--) {
-        const auto &event = m_events_processed.at(i - 1);
-        if (!std::holds_alternative<TimeElapsed>(event)) { return event; }
-    }
-    return m_events_processed.back();
+    // for (auto i = m_events_processed.size(); i; i--) {
+    //     const auto &event = m_events_processed.at(i - 1);
+    //     if (!std::holds_alternative<event::TimeElapsed>(event)) { return event; }
+    // }
+    //
+    // return m_events_processed.back();
+    const auto found = std::find_if(m_events_processed.rbegin(), m_events_processed.rend(), predicate);
+    return found != m_events_processed.rend() ? *found : m_events_processed.back();
 }
 
-auto kawe::EventProvider::getEventsProcessed() const noexcept -> const std::vector<Event> &
+auto kawe::EventProvider::getEventsProcessed() const noexcept -> const std::vector<event::Event> &
 {
     return m_events_processed;
 }
@@ -72,12 +76,12 @@ auto kawe::EventProvider::getTimeScaler() const noexcept -> const double & { ret
 
 auto kawe::EventProvider::setTimeScaler(double value) noexcept -> void { m_time_scaler = value; }
 
-auto kawe::EventProvider::fetchEvent() -> Event
+auto kawe::EventProvider::fetchEvent() -> event::Event
 {
     ::glfwPollEvents();
 
     if (m_buffer_events.empty()) {
-        return TimeElapsed{std::chrono::nanoseconds{
+        return event::TimeElapsed{std::chrono::nanoseconds{
             static_cast<std::int64_t>(static_cast<double>(getElapsedTime().count()) * m_time_scaler)}};
     } else {
         const auto event = m_buffer_events.front();
@@ -97,35 +101,36 @@ auto kawe::EventProvider::getElapsedTime() noexcept -> std::chrono::nanoseconds
 auto kawe::EventProvider::callback_eventClose(::GLFWwindow *window) -> void
 {
     ::glfwSetWindowShouldClose(window, false);
-    s_instance->m_buffer_events.emplace_back(CloseWindow{});
+    s_instance->m_buffer_events.emplace_back(event::Disconnected<event::Window>{});
 }
 
 auto kawe::EventProvider::callback_eventResized(GLFWwindow *, int w, int h) -> void
 {
-    s_instance->m_buffer_events.emplace_back(ResizeWindow{w, h});
+    s_instance->m_buffer_events.emplace_back(event::ResizeWindow{w, h});
 }
 
 auto kawe::EventProvider::callback_eventMoved(GLFWwindow *, int x, int y) -> void
 {
-    s_instance->m_buffer_events.emplace_back(MoveWindow{x, y});
+    s_instance->m_buffer_events.emplace_back(
+        event::Moved<event::Window>{event::Window{}, static_cast<double>(x), static_cast<double>(y)});
 }
 
 auto kawe::EventProvider::callback_eventKeyBoard(GLFWwindow *, int key, int scancode, int action, int mods) -> void
 {
     // clang-format off
-    const Key k{
+    const event::Key k{
         .alt        = !!(mods & GLFW_MOD_ALT),
         .control    = !!(mods & GLFW_MOD_CONTROL),
         .system     = !!(mods & GLFW_MOD_SUPER),
         .shift      = !!(mods & GLFW_MOD_SHIFT),
         .scancode   = scancode,
-        .keycode    = magic_enum::enum_cast<Key::Code>(key).value_or(Key::Code::KEY_UNKNOWN)
+        .keycode    = magic_enum::enum_cast<event::Key::Code>(key).value_or(event::Key::Code::KEY_UNKNOWN)
     };
     // clang-format on
     switch (action) {
-    case GLFW_PRESS: s_instance->m_buffer_events.emplace_back(Pressed<Key>{k}); break;
+    case GLFW_PRESS: s_instance->m_buffer_events.emplace_back(event::Pressed<event::Key>{k}); break;
     case GLFW_RELEASE:
-        s_instance->m_buffer_events.emplace_back(Released<Key>{k});
+        s_instance->m_buffer_events.emplace_back(event::Released<event::Key>{k});
         break;
         // case GLFW_REPEAT: s_instance->m_buffer_events.emplace_back(???{ key }); break; // todo
         // default: std::abort(); break;
@@ -133,17 +138,19 @@ auto kawe::EventProvider::callback_eventKeyBoard(GLFWwindow *, int key, int scan
 }
 
 auto kawe::EventProvider::callback_eventMousePressed(
-    GLFWwindow *window, int button, int action, [[maybe_unused]] int mods) -> void
+    [[maybe_unused]] GLFWwindow *window, int button, int action, [[maybe_unused]] int mods) -> void
 {
-    double x = 0;
-    double y = 0;
-    ::glfwGetCursorPos(window, &x, &y);
+    // double x = 0;
+    // double y = 0;
+    // ::glfwGetCursorPos(window, &x, &y);
     switch (action) {
     case GLFW_PRESS:
-        s_instance->m_buffer_events.emplace_back(Pressed<MouseButton>{MouseButton::toButton(button), {x, y}});
+        s_instance->m_buffer_events.emplace_back(
+            event::Pressed<event::MouseButton>{event::MouseButton::toButton(button), {}});
         break;
     case GLFW_RELEASE:
-        s_instance->m_buffer_events.emplace_back(Released<MouseButton>{MouseButton::toButton(button), {x, y}});
+        s_instance->m_buffer_events.emplace_back(
+            event::Released<event::MouseButton>{event::MouseButton::toButton(button), {}});
         break;
         // default: std::abort(); break;
     };
@@ -151,10 +158,10 @@ auto kawe::EventProvider::callback_eventMousePressed(
 
 auto kawe::EventProvider::callback_eventMouseMoved(GLFWwindow *, double x, double y) -> void
 {
-    s_instance->m_buffer_events.emplace_back(Moved<Mouse>{x, y});
+    s_instance->m_buffer_events.emplace_back(event::Moved<event::Mouse>{event::Mouse{}, x, y});
 }
 
 auto kawe::EventProvider::callback_char(GLFWwindow *, unsigned int codepoint) -> void
 {
-    s_instance->m_buffer_events.emplace_back(Character{codepoint});
+    s_instance->m_buffer_events.emplace_back(event::Character{codepoint});
 }
