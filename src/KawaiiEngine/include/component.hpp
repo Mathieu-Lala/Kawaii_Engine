@@ -18,6 +18,8 @@
 #include "resources/ResourceLoader.hpp"
 #include "State.hpp"
 
+using namespace std::chrono_literals;
+
 namespace kawe {
 
 struct Children {
@@ -434,7 +436,7 @@ struct Texture2D {
 
     static const Texture2D empty;
 
-    static auto emplace(entt::registry &world, entt::entity e, const std::string &filepath) -> Texture2D
+    static auto emplace(entt::registry &world, entt::entity e, const std::string &filepath) -> Texture2D &
     {
         auto &loader = *world.ctx<kawe::ResourceLoader *>();
         Texture2D texture{filepath, 0u, loader.load<Texture>(filepath)};
@@ -508,27 +510,19 @@ struct Clock {
         const std::chrono::milliseconds &refresh_rate,
         const std::function<void(void)> &callback) -> Clock &
     {
-        Clock clock{
-            .callback = callback, .refresh_rate = refresh_rate, .current = std::chrono::milliseconds::zero()};
-
-        auto &emplaced_clock = world.emplace<Clock>(entity, clock);
-
-        world.ctx<entt::dispatcher *>()->sink<kawe::TimeElapsed>().connect<&Clock::on_update>(
-            emplaced_clock);
-
-        return emplaced_clock;
+        return world.emplace<Clock>(entity, callback, refresh_rate, 0ms);
     }
 
-    auto on_update(const kawe::TimeElapsed &e) -> void
+    void on_update(const kawe::TimeElapsed &e)
     {
         current += std::chrono::duration_cast<std::chrono::milliseconds>(e.elapsed);
 
         if (current >= refresh_rate) {
             callback();
-            current = std::chrono::milliseconds::zero();
+            current = 0ms;
         }
     }
-};
+}; // namespace kawe
 
 struct Pickable {
     static constexpr std::string_view name{"Pickable"};
