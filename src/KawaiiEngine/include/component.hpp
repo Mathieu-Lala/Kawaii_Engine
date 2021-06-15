@@ -520,7 +520,7 @@ struct Clock {
 
     auto on_update(const kawe::event::TimeElapsed &e) -> void
     {
-        current += std::chrono::duration_cast<std::chrono::milliseconds>(e.elapsed);
+        current += std::chrono::duration_cast<std::chrono::milliseconds>(e.world_time);
 
         if (current >= refresh_rate) {
             callback();

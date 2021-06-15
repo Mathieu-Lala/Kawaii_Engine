@@ -23,7 +23,7 @@
 
 #include "widgets/ComponentInspector.hpp"
 #include "widgets/EntityHierarchy.hpp"
-#include "widgets/EventDisplayer.hpp"
+#include "widgets/EventMonitor.hpp"
 
 
 using namespace std::chrono_literals;
@@ -191,7 +191,7 @@ public:
         state = std::make_unique<State>(world);
         world.set<State *>(state.get());
 
-        event_displayer = std::make_unique<EventDisplayer>(events, world);
+        event_monitor = std::make_unique<EventMonitor>(events, world);
     }
 
     ~Engine()
@@ -257,6 +257,10 @@ public:
                         window->useEvent(e);
                         dispatcher.trigger<event::Character>(e);
                     },
+                    [&](const event::MouseScroll &e) {
+                        window->useEvent(e);
+                        dispatcher.trigger<event::MouseScroll>(e);
+                    },
                     [&](const event::TimeElapsed &e) { on_time_elapsed(e); },
                     [](const auto &) {}},
                 event);
@@ -275,13 +279,13 @@ private:
 
     ComponentInspector component_inspector;
     EntityHierarchy entity_hierarchy;
-    std::unique_ptr<EventDisplayer> event_displayer;
+    std::unique_ptr<EventMonitor> event_monitor;
 
     std::unique_ptr<State> state;
 
     auto on_time_elapsed(const event::TimeElapsed &e) -> void
     {
-        const auto dt_nano = e.elapsed;
+        const auto dt_nano = e.world_time;
         const auto dt_secs =
             static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(dt_nano).count())
             / 1'000'000.0;
@@ -321,7 +325,7 @@ private:
 
         entity_hierarchy.draw(world);
         component_inspector.draw(world);
-        event_displayer->draw();
+        event_monitor->draw();
 
         ImGui::Render();
 

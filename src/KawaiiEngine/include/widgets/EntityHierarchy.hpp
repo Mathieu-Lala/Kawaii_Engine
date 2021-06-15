@@ -14,7 +14,7 @@ public:
 
     auto draw(entt::registry &world)
     {
-        if (!ImGui::Begin("KAWE: Entity Hierarchy")) return;
+        if (!ImGui::Begin("KAWE: Entity Hierarchy")) return ImGui::End();
 
         ImGui::BeginChild("item view", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()));
         if (ImGui::Selectable("none", !selected.has_value())) { selected = {}; }

@@ -17,13 +17,27 @@ public:
     auto assign(const Window &window) -> void;
     auto getNextEvent() -> event::Event;
     auto getLastEventWhere(const std::function<bool(const event::Event &)> &predicate) const noexcept
-        -> const event::Event &;
-    auto getEventsProcessed() const noexcept -> const std::vector<event::Event> &;
-    auto setCurrentTimepoint(const std::chrono::steady_clock::time_point &t) -> void;
-    auto getTimeScaler() const noexcept -> const double &;
-    auto setTimeScaler(double value) noexcept -> void;
+        -> std::optional<const event::Event *>;
 
     auto exportEvents();
+
+    auto getEventsProcessed() const noexcept -> const std::vector<event::Event> &
+    {
+        return m_events_processed;
+    }
+
+    auto getEventsPending() const noexcept -> const std::vector<event::Event> & { return m_buffer_events; }
+
+    auto setCurrentTimepoint(const std::chrono::steady_clock::time_point &t) -> void { m_lastTimePoint = t; }
+
+    auto getTimeScaler() const noexcept -> const double & { return m_time_scaler; }
+    auto setTimeScaler(double value) noexcept -> void { m_time_scaler = value; }
+
+    auto clear() -> void
+    {
+        m_buffer_events.clear();
+        m_events_processed.clear();
+    }
 
 private:
     static EventProvider *s_instance;
@@ -45,6 +59,7 @@ private:
     static auto callback_eventMousePressed(GLFWwindow *window, int button, int action, int mods) -> void;
     static auto callback_eventMouseMoved(GLFWwindow *, double x, double y) -> void;
     static auto callback_char(GLFWwindow *, unsigned int codepoint) -> void;
+    static auto callback_scroll(GLFWwindow *, double xoffset, double yoffset) -> void;
 };
 
 } // namespace kawe

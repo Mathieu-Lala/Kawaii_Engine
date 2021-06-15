@@ -18,10 +18,7 @@ auto kawe::EventProvider::assign(const Window &window) -> void
     ::glfwSetMouseButtonCallback(window.get(), callback_eventMousePressed);
     ::glfwSetCursorPosCallback(window.get(), callback_eventMouseMoved);
     ::glfwSetCharCallback(window.get(), callback_char);
-
-    // todo : ImGui_ImplGlfw_ScrollCallback
-    // glfwSetScrollCallback(window, scroll_callback);
-    // void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+    ::glfwSetScrollCallback(window.get(), callback_scroll);
 
     // glfwSetJoystickCallback(joystick_configuration_change_handler);
     // glfwSetFramebufferSizeCallback(window, framebuffer_size_handler);
@@ -30,59 +27,48 @@ auto kawe::EventProvider::assign(const Window &window) -> void
     // glfwSetErrorCallback(error_handler);
 
     m_buffer_events.emplace_back(event::Connected<event::Window>{});
-    m_events_processed.emplace_back(event::TimeElapsed{});
 }
 
 auto kawe::EventProvider::getNextEvent() -> event::Event
 {
     const auto event = fetchEvent();
 
-    std::visit(
-        overloaded{
-            [](event::TimeElapsed &prev, const event::TimeElapsed &next) { prev.elapsed += next.elapsed; },
-            [&](const auto &, const std::monostate &) {},
-            [&](const auto &, const auto &next) { m_events_processed.push_back(next); }},
-        m_events_processed.back(),
-        event);
+    if (!m_events_processed.empty()) {
+        // post processing to merge the event for example
+        std::visit(
+            overloaded{
+                [](event::TimeElapsed &prev, const event::TimeElapsed &next) { prev += next; },
+                [&](const auto &, const auto &next) { m_events_processed.push_back(next); }},
+            m_events_processed.back(),
+            event);
+    } else {
+        m_events_processed.push_back(event);
+    }
 
     return event;
 }
 
 auto kawe::EventProvider::getLastEventWhere(const std::function<bool(const event::Event &)> &predicate) const noexcept
-    -> const event::Event &
+    -> std::optional<const event::Event *>
 {
-    // todo : replace this this something like std::find_last_where
-    // for (auto i = m_events_processed.size(); i; i--) {
-    //     const auto &event = m_events_processed.at(i - 1);
-    //     if (!std::holds_alternative<event::TimeElapsed>(event)) { return event; }
-    // }
-    //
-    // return m_events_processed.back();
-    const auto found = std::find_if(m_events_processed.rbegin(), m_events_processed.rend(), predicate);
-    return found != m_events_processed.rend() ? *found : m_events_processed.back();
+    if (const auto found = std::find_if(m_events_processed.rbegin(), m_events_processed.rend(), predicate);
+        found != m_events_processed.rend()) {
+        return &(*found);
+    } else {
+        return {};
+    }
 }
-
-auto kawe::EventProvider::getEventsProcessed() const noexcept -> const std::vector<event::Event> &
-{
-    return m_events_processed;
-}
-
-auto kawe::EventProvider::setCurrentTimepoint(const std::chrono::steady_clock::time_point &t) -> void
-{
-    m_lastTimePoint = t;
-}
-
-auto kawe::EventProvider::getTimeScaler() const noexcept -> const double & { return m_time_scaler; }
-
-auto kawe::EventProvider::setTimeScaler(double value) noexcept -> void { m_time_scaler = value; }
 
 auto kawe::EventProvider::fetchEvent() -> event::Event
 {
     ::glfwPollEvents();
 
     if (m_buffer_events.empty()) {
-        return event::TimeElapsed{std::chrono::nanoseconds{
-            static_cast<std::int64_t>(static_cast<double>(getElapsedTime().count()) * m_time_scaler)}};
+        const auto elapsed = getElapsedTime();
+        return event::TimeElapsed{
+            std::chrono::nanoseconds{static_cast<std::int64_t>(static_cast<double>(elapsed.count()))},
+            std::chrono::nanoseconds{
+                static_cast<std::int64_t>(static_cast<double>(elapsed.count()) * m_time_scaler)}};
     } else {
         const auto event = m_buffer_events.front();
         m_buffer_events.erase(m_buffer_events.begin());
@@ -164,4 +150,9 @@ auto kawe::EventProvider::callback_eventMouseMoved(GLFWwindow *, double x, doubl
 auto kawe::EventProvider::callback_char(GLFWwindow *, unsigned int codepoint) -> void
 {
     s_instance->m_buffer_events.emplace_back(event::Character{codepoint});
+}
+
+auto kawe::EventProvider::callback_scroll(GLFWwindow *, double xoffset, double yoffset) -> void
+{
+    s_instance->m_buffer_events.emplace_back(event::MouseScroll{xoffset, yoffset});
 }

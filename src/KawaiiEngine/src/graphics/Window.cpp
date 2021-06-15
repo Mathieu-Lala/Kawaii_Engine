@@ -64,3 +64,9 @@ auto kawe::Window::useEvent(const event::Character &character) -> void
 {
     ::ImGui_ImplGlfw_CharCallback(window, character.codepoint);
 }
+
+template<>
+auto kawe::Window::useEvent(const event::MouseScroll &scroll) -> void
+{
+    ::ImGui_ImplGlfw_ScrollCallback(window, scroll.x, scroll.y);
+}

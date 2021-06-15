@@ -60,36 +60,25 @@ struct Window {
     int id;
 };
 
-/*
-struct CloseWindow { // note : should be Disonnected<Window>
-    constexpr static std::string_view name{"CloseWindow"};
-    constexpr static std::array<std::string_view, 0> elements{};
-};
-
-struct OpenWindow { // note : should be Connected<Window>
-    constexpr static std::string_view name{"OpenWindow"};
-    constexpr static std::array<std::string_view, 0> elements{};
-};
-*/
-
 struct ResizeWindow {
     constexpr static std::string_view name{"ResizeWindow"};
     constexpr static auto elements = std::to_array<std::string_view>({"width", "height"});
     int width;
     int height;
 };
-/*
-struct MoveWindow { // note : could use Moved<Window> ?
-    constexpr static std::string_view name{"MoveWindow"};
-    constexpr static auto elements = std::to_array<std::string_view>({"x", "y"});
-    int x;
-    int y;
-};
-*/
+
 struct TimeElapsed {
     constexpr static std::string_view name{"TimeElapsed"};
-    constexpr static std::array elements{std::string_view{"elapsed"}};
+    constexpr static auto elements = std::to_array<std::string_view>({"elapsed", "world_time"});
     std::chrono::steady_clock::duration elapsed;
+    std::chrono::steady_clock::duration world_time;
+
+    auto operator+=(const TimeElapsed &other) -> TimeElapsed &
+    {
+        elapsed += other.elapsed;
+        world_time += other.world_time;
+        return *this;
+    }
 };
 
 /// Device Related
@@ -270,6 +259,13 @@ struct MouseButton {
     Mouse mouse;
 };
 
+struct MouseScroll {
+    constexpr static std::string_view name{"MouseScroll"};
+    constexpr static auto elements = std::to_array<std::string_view>({"x", "y"});
+    double x;
+    double y;
+};
+
 struct Character {
     constexpr static std::string_view name{"Character"};
     constexpr static auto elements = std::to_array<std::string_view>({"codepoint"});
@@ -367,6 +363,7 @@ using Event = std::variant<
     Moved<Mouse>,
     Pressed<MouseButton>,
     Released<MouseButton>,
+    MouseScroll,
 
     Connected<Joystick>,
     Disconnected<Joystick>,
