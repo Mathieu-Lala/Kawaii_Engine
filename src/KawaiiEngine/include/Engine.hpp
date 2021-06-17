@@ -193,6 +193,9 @@ public:
         events = std::make_unique<EventProvider>(*window);
         event_monitor = std::make_unique<EventMonitor>(*events, world);
         recorder = std::make_unique<Recorder>(*window);
+
+        ImGuiIO &io = ImGui::GetIO();
+        io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     }
 
     ~Engine()
@@ -303,6 +306,33 @@ private:
 
     std::unique_ptr<State> state;
 
+    static auto draw_docking_window() -> void
+    {
+        const ImGuiViewport *viewport = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(viewport->WorkPos);
+        ImGui::SetNextWindowSize(viewport->WorkSize);
+        ImGui::SetNextWindowViewport(viewport->ID);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+
+        ImGui::Begin(
+            "DockSpace Demo",
+            nullptr,
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize
+                | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus
+                | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking);
+        ImGui::PopStyleVar();
+
+        ImGui::PopStyleVar(2);
+
+        ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+        ImGui::DockSpace(
+            dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None | ImGuiDockNodeFlags_PassthruCentralNode);
+
+        ImGui::End();
+    }
+
     auto on_time_elapsed(const event::TimeElapsed &e) -> void
     {
         const auto dt_nano = e.world_time;
@@ -342,14 +372,15 @@ private:
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        ImGui::ShowDemoWindow();
-
-        on_imgui();
-
-        entity_hierarchy.draw(world);
-        component_inspector.draw(world);
-        event_monitor->draw();
-        recorder->draw();
+        draw_docking_window();
+        {
+            ImGui::ShowDemoWindow();
+            on_imgui();
+            entity_hierarchy.draw(world);
+            component_inspector.draw(world);
+            event_monitor->draw();
+            recorder->draw();
+        }
 
         ImGui::Render();
 
