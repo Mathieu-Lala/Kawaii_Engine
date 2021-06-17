@@ -1,14 +1,9 @@
 #pragma once
 
-#include <imgui.h>
-#include <imgui_impl_glfw.h>
-#include <imgui_impl_opengl3.h>
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
-
 #include <spdlog/spdlog.h>
 #include <string_view>
 #include <glm/vec2.hpp>
+#include "graphics/deps.hpp"
 
 namespace kawe {
 
@@ -16,12 +11,7 @@ class EventProvider;
 
 class Window {
 public:
-    Window(
-        EventProvider &,
-        const std::string_view window_title,
-        glm::ivec2 &&size,
-        glm::ivec2 &&position = {0, 0},
-        bool isFullscreen = false);
+    Window(const std::string_view window_title, glm::ivec2 &&size, glm::ivec2 &&position = {0, 0}, bool isFullscreen = false);
 
     ~Window() { glfwDestroyWindow(window); }
 
@@ -54,6 +44,14 @@ public:
         const auto size = getSize<T>();
         return static_cast<T>(size.x) / static_cast<T>(size.y);
     }
+
+    auto setCursorPosition(glm::dvec2 &&pos) -> void { ::glfwSetCursorPos(window, pos.x, pos.y); }
+
+    auto setPosition(glm::ivec2 &&pos) -> void { ::glfwSetWindowPos(window, pos.x, pos.y); }
+
+    auto setSize(glm::ivec2 &&size) -> void { ::glfwSetWindowSize(window, size.x, size.y); }
+
+    auto screenshot(const std::string_view filename) -> bool;
 
 private:
     GLFWwindow *window;

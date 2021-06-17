@@ -2,7 +2,7 @@
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
-#include "tiny_obj_loader.h"
+#include <tiny_obj_loader.h>
 
 namespace kawe {
 

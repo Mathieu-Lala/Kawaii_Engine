@@ -14,7 +14,7 @@ public:
 
     auto draw(entt::registry &world)
     {
-        if (!ImGui::Begin("KAWE: Entity Hierarchy")) return;
+        if (!ImGui::Begin("KAWE: Entity Hierarchy")) return ImGui::End();
 
         ImGui::BeginChild("item view", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()));
         if (ImGui::Selectable("none", !selected.has_value())) { selected = {}; }
@@ -73,7 +73,7 @@ public:
                                                       | ImGuiTreeNodeFlags_SpanAvailWidth;
 
             for (const auto &i : entry) {
-                const auto &name = world.get_or_emplace<Name>(i.e, fmt::format("<anonymous#{}>", i.e));
+                const auto &name = world.get_or_emplace<Name>(i.e, fmt::format("<kawe:anonymous#{}>", i.e));
 
                 auto node_flags = base_flags;
                 if (selected.has_value() && selected.value() == i.e) {

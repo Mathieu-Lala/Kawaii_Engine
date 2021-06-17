@@ -513,9 +513,9 @@ struct Clock {
         return world.emplace<Clock>(entity, callback, refresh_rate, 0ms);
     }
 
-    void on_update(const kawe::TimeElapsed &e)
+    void on_update(const kawe::event::TimeElapsed &e)
     {
-        current += std::chrono::duration_cast<std::chrono::milliseconds>(e.elapsed);
+        current += std::chrono::duration_cast<std::chrono::milliseconds>(e.world_time);
 
         if (current >= refresh_rate) {
             callback();

@@ -1,8 +1,5 @@
 #pragma once
 
-#define TINYOBJLOADER_IMPLEMENTATION
-#define STB_IMAGE_IMPLEMENTATION
-
 #include <memory>
 #include <thread>
 
@@ -23,6 +20,8 @@
 
 #include "widgets/ComponentInspector.hpp"
 #include "widgets/EntityHierarchy.hpp"
+#include "widgets/EventMonitor.hpp"
+#include "widgets/Recorder.hpp"
 
 
 using namespace std::chrono_literals;
@@ -54,7 +53,8 @@ public:
 
         spdlog::trace("[GLFW] Version: '{}'\n", glfwGetVersionString());
 
-        window = std::make_unique<Window>(events, "test", glm::ivec2{1600, 900});
+        // todo : allow app to change that
+        window = std::make_unique<Window>("Kawe: Engine", glm::ivec2{1600, 900});
         glfwMakeContextCurrent(window->get());
 
         if (const auto err = glewInit(); err != GLEW_OK) {
@@ -181,14 +181,21 @@ public:
 
         world.on_construct<CameraData>().connect<&Engine::update_camera>(*this);
         world.on_update<CameraData>().connect<&Engine::update_camera>(*this);
-        dispatcher.sink<TimeElapsed>().connect<&Engine::update_camera_event>(*this);
+        dispatcher.sink<event::TimeElapsed>().connect<&Engine::update_camera_event>(*this);
         world.on_update<Position3f>().connect<&Engine::update_camera>(*this);
 
 
         world.set<entt::dispatcher *>(&dispatcher);
         world.set<ResourceLoader *>(&loader);
-        state = std::make_unique<State>(world, *window);
+        state = std::make_unique<State>(world);
         world.set<State *>(state.get());
+
+        events = std::make_unique<EventProvider>(*window);
+        event_monitor = std::make_unique<EventMonitor>(*events, world);
+        recorder = std::make_unique<Recorder>(*window);
+
+        ImGuiIO &io = ImGui::GetIO();
+        io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     }
 
     ~Engine()
@@ -213,48 +220,70 @@ public:
 
         const auto camera_one = world.create();
         world.emplace<CameraData>(camera_one);
+        world.emplace_or_replace<Name>(camera_one, fmt::format("<kawe:camera#{}>", camera_one));
 
         on_create(world);
 
         while (state->is_running && !window->should_close()) {
-            const auto event = events.getNextEvent();
+            const auto event = events->getNextEvent();
+
+            if (events->getState() == EventProvider::State::PLAYBACK) {
+                std::visit(
+                    overloaded{
+                        [&](const event::TimeElapsed &e) { std::this_thread::sleep_for(e.elapsed); },
+                        [&](const event::Moved<event::Mouse> &e) {
+                            window->setCursorPosition({e.x, e.y});
+                        },
+                        [&](const event::Moved<event::Window> &e) {
+                            window->setPosition({e.x, e.y});
+                        },
+                        [&](const event::ResizeWindow &e) {
+                            window->setSize({e.width, e.height});
+                        },
+                        [](const auto &) {}},
+                    event);
+            }
 
             std::visit(
-                kawe::overloaded{
-                    [&](const kawe::OpenWindow &) {
-                        events.setCurrentTimepoint(std::chrono::steady_clock::now());
+                overloaded{
+                    [&](const event::Connected<event::Window> &) {
+                        events->setCurrentTimepoint(std::chrono::steady_clock::now());
                     },
-                    [&](const kawe::CloseWindow &) { state->is_running = false; },
-                    [&](const kawe::Moved<kawe::Mouse> &mouse) {
-                        state->mouse_pos = {mouse.source.x, mouse.source.y};
-                        dispatcher.trigger<kawe::Moved<kawe::Mouse>>(mouse);
+                    [&](const event::Disconnected<event::Window> &) { state->is_running = false; },
+                    [&](const event::Moved<event::Mouse> &mouse) {
+                        state->mouse_pos = {mouse.x, mouse.y};
+                        dispatcher.trigger<event::Moved<event::Mouse>>(mouse);
                     },
-                    [&](const kawe::Pressed<kawe::MouseButton> &e) {
+                    [&](const event::Pressed<event::MouseButton> &e) {
                         window->useEvent(e);
                         state->state_mouse_button[e.source.button] = true;
-                        state->mouse_pos_when_pressed = {e.source.mouse.x, e.source.mouse.y};
-                        dispatcher.trigger<kawe::Pressed<kawe::MouseButton>>(e);
+                        state->mouse_pos_when_pressed = state->mouse_pos;
+                        dispatcher.trigger<event::Pressed<event::MouseButton>>(e);
                     },
-                    [&](const kawe::Released<kawe::MouseButton> &e) {
+                    [&](const event::Released<event::MouseButton> &e) {
                         window->useEvent(e);
                         state->state_mouse_button[e.source.button] = false;
-                        dispatcher.trigger<kawe::Released<kawe::MouseButton>>(e);
+                        dispatcher.trigger<event::Released<event::MouseButton>>(e);
                     },
-                    [&](const kawe::Pressed<kawe::Key> &e) {
+                    [&](const event::Pressed<event::Key> &e) {
                         window->useEvent(e);
                         state->keyboard_state[e.source.keycode] = true;
-                        dispatcher.trigger<kawe::Pressed<kawe::Key>>(e);
+                        dispatcher.trigger<event::Pressed<event::Key>>(e);
                     },
-                    [&](const kawe::Released<kawe::Key> &e) {
+                    [&](const event::Released<event::Key> &e) {
                         window->useEvent(e);
                         state->keyboard_state[e.source.keycode] = false;
-                        dispatcher.trigger<kawe::Released<kawe::Key>>(e);
+                        dispatcher.trigger<event::Released<event::Key>>(e);
                     },
-                    [&](const kawe::Character &e) {
+                    [&](const event::Character &e) {
                         window->useEvent(e);
-                        dispatcher.trigger<kawe::Character>(e);
+                        dispatcher.trigger<event::Character>(e);
                     },
-                    [&](const kawe::TimeElapsed &e) { on_time_elapsed(e); },
+                    [&](const event::MouseScroll &e) {
+                        window->useEvent(e);
+                        dispatcher.trigger<event::MouseScroll>(e);
+                    },
+                    [&](const event::TimeElapsed &e) { on_time_elapsed(e); },
                     [](const auto &) {}},
                 event);
         }
@@ -263,7 +292,7 @@ public:
     }
 
 private:
-    EventProvider events;
+    std::unique_ptr<EventProvider> events;
     std::unique_ptr<Window> window;
 
     ResourceLoader loader;
@@ -272,12 +301,41 @@ private:
 
     ComponentInspector component_inspector;
     EntityHierarchy entity_hierarchy;
+    std::unique_ptr<EventMonitor> event_monitor;
+    std::unique_ptr<Recorder> recorder;
 
     std::unique_ptr<State> state;
 
-    auto on_time_elapsed(const kawe::TimeElapsed &e) -> void
+    static auto draw_docking_window() -> void
     {
-        const auto dt_nano = e.elapsed;
+        const ImGuiViewport *viewport = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(viewport->WorkPos);
+        ImGui::SetNextWindowSize(viewport->WorkSize);
+        ImGui::SetNextWindowViewport(viewport->ID);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+
+        ImGui::Begin(
+            "DockSpace Demo",
+            nullptr,
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize
+                | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus
+                | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking);
+        ImGui::PopStyleVar();
+
+        ImGui::PopStyleVar(2);
+
+        ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+        ImGui::DockSpace(
+            dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None | ImGuiDockNodeFlags_PassthruCentralNode);
+
+        ImGui::End();
+    }
+
+    auto on_time_elapsed(const event::TimeElapsed &e) -> void
+    {
+        const auto dt_nano = e.world_time;
         const auto dt_secs =
             static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(dt_nano).count())
             / 1'000'000.0;
@@ -308,18 +366,21 @@ private:
         }
 
         // todo : trigger a time elapsed only if the simulation is running
-        dispatcher.trigger<kawe::TimeElapsed>(e);
+        dispatcher.trigger<event::TimeElapsed>(e);
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        ImGui::ShowDemoWindow();
-
-        on_imgui();
-
-        entity_hierarchy.draw(world);
-        component_inspector.draw(world);
+        draw_docking_window();
+        {
+            ImGui::ShowDemoWindow();
+            on_imgui();
+            entity_hierarchy.draw(world);
+            component_inspector.draw(world);
+            event_monitor->draw();
+            recorder->draw();
+        }
 
         ImGui::Render();
 
@@ -363,7 +424,7 @@ private:
         cam->view = glm::lookAt(pos.component, cam->target_center, cam->up);
     };
 
-    auto update_camera_event(const TimeElapsed &e) -> void
+    auto update_camera_event(const event::TimeElapsed &e) -> void
     {
         const auto dt_nano = e.elapsed;
         const auto dt_secs =
@@ -392,16 +453,16 @@ private:
                     const auto size = window->getSize<double>() * glm::dvec2{data.viewport.w, data.viewport.h};
 
                     switch (button) {
-                    case kawe::MouseButton::Button::BUTTON_LEFT: {
+                    case event::MouseButton::Button::BUTTON_LEFT: {
                         const auto amount_x = (state->mouse_pos.x - state->mouse_pos_when_pressed.x) / size.x;
                         const auto amount_y = (state->mouse_pos_when_pressed.y - state->mouse_pos.y) / size.y;
                         CameraData::rotate(world, camera, data, {amount_x * ms, amount_y * ms});
                     } break;
-                    case kawe::MouseButton::Button::BUTTON_MIDDLE: {
+                    case event::MouseButton::Button::BUTTON_MIDDLE: {
                         const auto amount = (state->mouse_pos_when_pressed.y - state->mouse_pos.y) / size.y;
                         CameraData::zoom(world, camera, data, amount * ms);
                     } break;
-                    case kawe::MouseButton::Button::BUTTON_RIGHT: {
+                    case event::MouseButton::Button::BUTTON_RIGHT: {
                         const auto amount_x = (state->mouse_pos.x - state->mouse_pos_when_pressed.x) / size.x;
                         const auto amount_y = (state->mouse_pos_when_pressed.y - state->mouse_pos.y) / size.y;
                         CameraData::translate(
@@ -409,7 +470,7 @@ private:
                             camera,
                             data,
                             {-amount_x * ms, -amount_y * ms},
-                            !state->keyboard_state[Key::Code::KEY_LEFT_CONTROL]);
+                            !state->keyboard_state[event::Key::Code::KEY_LEFT_CONTROL]);
                     } break;
                     default: break;
                     }
@@ -764,7 +825,7 @@ private:
             }
         };
 
-        if (state->state_mouse_button[MouseButton::Button::BUTTON_LEFT]
+        if (state->state_mouse_button[event::MouseButton::Button::BUTTON_LEFT]
             && !ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow)) {
             const auto &list_pickable = world.view<Pickable, Render::VAO>();
             if (list_pickable.size_hint() != 0) {

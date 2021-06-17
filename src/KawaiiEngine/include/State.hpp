@@ -12,7 +12,7 @@
 namespace kawe {
 
 struct State {
-    State(entt::registry &world, [[maybe_unused]] const Window &window)
+    State(entt::registry &world)
     {
         const auto default_vert = world.ctx<ResourceLoader *>()->load<Shader>("./asset/shader/default.vert");
         const auto default_frag = world.ctx<ResourceLoader *>()->load<Shader>("./asset/shader/default.frag");
@@ -39,10 +39,10 @@ struct State {
 
         shaders.emplace_back(std::make_unique<ShaderProgram>(
             "picking", std::vector<uint32_t>{picking_vert->shader_id, picking_frag->shader_id}));
-        for (const auto &i : magic_enum::enum_values<MouseButton::Button>()) {
+        for (const auto &i : magic_enum::enum_values<event::MouseButton::Button>()) {
             state_mouse_button[i] = false;
         }
-        for (const auto &i : magic_enum::enum_values<Key::Code>()) { keyboard_state[i] = false; }
+        for (const auto &i : magic_enum::enum_values<event::Key::Code>()) { keyboard_state[i] = false; }
     }
 
     std::vector<std::unique_ptr<ShaderProgram>> shaders;
@@ -53,8 +53,8 @@ struct State {
     glm::dvec2 mouse_pos{};
     glm::dvec2 mouse_pos_when_pressed{};
 
-    std::unordered_map<MouseButton::Button, bool> state_mouse_button;
-    std::unordered_map<Key::Code, bool> keyboard_state;
+    std::unordered_map<event::MouseButton::Button, bool> state_mouse_button;
+    std::unordered_map<event::Key::Code, bool> keyboard_state;
 
     bool is_running = true;
 };
