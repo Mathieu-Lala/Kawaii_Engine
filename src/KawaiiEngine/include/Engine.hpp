@@ -1,8 +1,5 @@
 #pragma once
 
-#define TINYOBJLOADER_IMPLEMENTATION
-#define STB_IMAGE_IMPLEMENTATION
-
 #include <memory>
 #include <thread>
 
@@ -24,6 +21,7 @@
 #include "widgets/ComponentInspector.hpp"
 #include "widgets/EntityHierarchy.hpp"
 #include "widgets/EventMonitor.hpp"
+#include "widgets/Recorder.hpp"
 
 
 using namespace std::chrono_literals;
@@ -55,7 +53,8 @@ public:
 
         spdlog::trace("[GLFW] Version: '{}'\n", glfwGetVersionString());
 
-        window = std::make_unique<Window>(events, "test", glm::ivec2{1600, 900});
+        // todo : allow app to change that
+        window = std::make_unique<Window>("Kawe: Engine", glm::ivec2{1600, 900});
         glfwMakeContextCurrent(window->get());
 
         if (const auto err = glewInit(); err != GLEW_OK) {
@@ -191,7 +190,9 @@ public:
         state = std::make_unique<State>(world);
         world.set<State *>(state.get());
 
-        event_monitor = std::make_unique<EventMonitor>(events, world);
+        events = std::make_unique<EventProvider>(*window);
+        event_monitor = std::make_unique<EventMonitor>(*events, world);
+        recorder = std::make_unique<Recorder>(*window);
     }
 
     ~Engine()
@@ -216,16 +217,34 @@ public:
 
         const auto camera_one = world.create();
         world.emplace<CameraData>(camera_one);
+        world.emplace_or_replace<Name>(camera_one, fmt::format("<kawe:camera#{}>", camera_one));
 
         on_create(world);
 
         while (state->is_running && !window->should_close()) {
-            const auto event = events.getNextEvent();
+            const auto event = events->getNextEvent();
+
+            if (events->getState() == EventProvider::State::PLAYBACK) {
+                std::visit(
+                    overloaded{
+                        [&](const event::TimeElapsed &e) { std::this_thread::sleep_for(e.elapsed); },
+                        [&](const event::Moved<event::Mouse> &e) {
+                            window->setCursorPosition({e.x, e.y});
+                        },
+                        [&](const event::Moved<event::Window> &e) {
+                            window->setPosition({e.x, e.y});
+                        },
+                        [&](const event::ResizeWindow &e) {
+                            window->setSize({e.width, e.height});
+                        },
+                        [](const auto &) {}},
+                    event);
+            }
 
             std::visit(
                 overloaded{
                     [&](const event::Connected<event::Window> &) {
-                        events.setCurrentTimepoint(std::chrono::steady_clock::now());
+                        events->setCurrentTimepoint(std::chrono::steady_clock::now());
                     },
                     [&](const event::Disconnected<event::Window> &) { state->is_running = false; },
                     [&](const event::Moved<event::Mouse> &mouse) {
@@ -270,7 +289,7 @@ public:
     }
 
 private:
-    EventProvider events;
+    std::unique_ptr<EventProvider> events;
     std::unique_ptr<Window> window;
 
     ResourceLoader loader;
@@ -280,6 +299,7 @@ private:
     ComponentInspector component_inspector;
     EntityHierarchy entity_hierarchy;
     std::unique_ptr<EventMonitor> event_monitor;
+    std::unique_ptr<Recorder> recorder;
 
     std::unique_ptr<State> state;
 
@@ -326,6 +346,7 @@ private:
         entity_hierarchy.draw(world);
         component_inspector.draw(world);
         event_monitor->draw();
+        recorder->draw();
 
         ImGui::Render();
 

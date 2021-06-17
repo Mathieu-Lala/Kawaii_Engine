@@ -1,7 +1,6 @@
-#include <imgui.h>
-
 #include <spdlog/spdlog.h>
 
+#include "graphics/deps.hpp"
 #include <ImGuiFileDialog.h>
 
 #include "helpers/macro.hpp"
@@ -83,7 +82,7 @@ template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Texture2D &texture) const
     -> void
 {
-    ImGui::Text("path: %s", texture.filepath.data());
+    ImGuiHelper::Text("path: {}", texture.filepath.data());
 
     ImGuiFileDialog::Instance()->SetExtentionInfos(".png", ImVec4(1.0f, 1.0f, 0.0f, 0.9f));
     ImGuiFileDialog::Instance()->SetExtentionInfos(".jpg", ImVec4(1.0f, 1.0f, 0.0f, 0.9f));
@@ -333,9 +332,9 @@ template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Mesh &mesh) const
     -> void
 {
-    ImGui::Text("path: %s", mesh.filepath.c_str());
-    ImGui::Text("model: %s", mesh.model_name.c_str());
-    ImGui::Text("loaded successfully: %s", mesh.loaded_successfully ? "Yes" : "No");
+    ImGuiHelper::Text("path: {}", mesh.filepath.c_str());
+    ImGuiHelper::Text("model: {}", mesh.model_name.c_str());
+    ImGuiHelper::Text("loaded successfully: {}", mesh.loaded_successfully ? "Yes" : "No");
 
     ImGuiFileDialog::Instance()->SetExtentionInfos(".obj", ImVec4(1.0f, 1.0f, 0.0f, 0.9f));
 
@@ -362,8 +361,8 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt:
 template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &, entt::entity, const AABB &aabb) const -> void
 {
-    ImGui::Text(fmt::format("min: {{.x: {}, .y: {}, .z: {}}}", aabb.min.x, aabb.min.y, aabb.min.z).data());
-    ImGui::Text(fmt::format("max: {{.x: {}, .y: {}, .z: {}}}", aabb.max.x, aabb.max.y, aabb.max.z).data());
+    ImGuiHelper::Text("min: {{.x: {}, .y: {}, .z: {}}}", aabb.min.x, aabb.min.y, aabb.min.z);
+    ImGuiHelper::Text("max: {{.x: {}, .y: {}, .z: {}}}", aabb.max.x, aabb.max.y, aabb.max.z);
 }
 
 template<>
@@ -371,15 +370,15 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &, entt::enti
     -> void
 {
     constexpr auto enum_name = magic_enum::enum_type_name<Collider::CollisionStep>();
-    ImGui::Text(fmt::format("{} = {}", enum_name.data(), magic_enum::enum_name(collider.step)).data());
+    ImGuiHelper::Text("{} = {}", enum_name.data(), magic_enum::enum_name(collider.step));
 }
 
 template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity, const Parent &parent) const
     -> void
 {
-    ImGui::Text(
-        "parent = '%s'",
+    ImGuiHelper::Text(
+        "parent = '{}'",
         world.valid(parent.component) ? world.get<Name>(parent.component).component.data() : "null");
 }
 
@@ -392,7 +391,7 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt:
     } else {
         int it = 0;
         for (const auto &i : children.component) {
-            ImGui::Text("children[%d] = '%s'", it++, world.get<Name>(i).component.data());
+            ImGuiHelper::Text("children[{}] = '{}'", it++, world.get<Name>(i).component.data());
         }
     }
 }
@@ -485,30 +484,27 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt:
 
     ImGui::Separator();
 
-    ImGui::Text(fmt::format(
-                    "target position: {{.x: {}, .y: {}, .z: {}}}",
-                    camera.target_center.x,
-                    camera.target_center.y,
-                    camera.target_center.z)
-                    .data());
+    ImGuiHelper::Text(
+        "target position: {{.x: {}, .y: {}, .z: {}}}",
+        camera.target_center.x,
+        camera.target_center.y,
+        camera.target_center.z);
 
     // read only data
 
-    ImGui::Text(fmt::format("display: {{.x: {}, .y: {}}}", camera.display.x, camera.display.y).data());
+    ImGuiHelper::Text("display: {{.x: {}, .y: {}}}", camera.display.x, camera.display.y);
 
-    ImGui::Text(fmt::format(
-                    "plan vert: {{.x: {}, .y: {}, .z: {}}}",
-                    camera.imagePlaneVertDir.x,
-                    camera.imagePlaneVertDir.y,
-                    camera.imagePlaneVertDir.z)
-                    .data());
+    ImGuiHelper::Text(
+        "plan vert: {{.x: {}, .y: {}, .z: {}}}",
+        camera.imagePlaneVertDir.x,
+        camera.imagePlaneVertDir.y,
+        camera.imagePlaneVertDir.z);
 
-    ImGui::Text(fmt::format(
-                    "plan horz: {{.x: {}, .y: {}, .z: {}}}",
-                    camera.imagePlaneHorizDir.x,
-                    camera.imagePlaneHorizDir.y,
-                    camera.imagePlaneHorizDir.z)
-                    .data());
+    ImGuiHelper::Text(
+        "plan horz: {{.x: {}, .y: {}, .z: {}}}",
+        camera.imagePlaneHorizDir.x,
+        camera.imagePlaneHorizDir.y,
+        camera.imagePlaneHorizDir.z);
 }
 
 auto kawe::ComponentInspector::draw(entt::registry &world) -> void
@@ -516,10 +512,11 @@ auto kawe::ComponentInspector::draw(entt::registry &world) -> void
     if (!ImGui::Begin("KAWE: Component Inspector")) return ImGui::End();
 
     ImGui::BeginChild("item view", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()));
-    ImGui::Text(
-        "Entity: %s",
+    ImGuiHelper::Text(
+        "Entity: {}",
         selected.has_value()
-            ? world.get_or_emplace<Name>(selected.value(), fmt::format("<anonymous#{}>", selected.value()))
+            ? world
+                  .get_or_emplace<Name>(selected.value(), fmt::format("<kawe:anonymous#{}>", selected.value()))
                   .component.data()
             : "No entity selected");
 

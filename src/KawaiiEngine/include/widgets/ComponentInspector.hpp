@@ -16,7 +16,7 @@ private:
     template<typename T>
     auto drawComponentTweaker(entt::registry &, entt::entity, const T &) const -> void
     {
-        ImGui::Text("<not implemented> %s", std::decay_t<T>::name.data());
+        ImGuiHelper::Text("<not implemented> {}", std::decay_t<T>::name.data());
     }
 };
 

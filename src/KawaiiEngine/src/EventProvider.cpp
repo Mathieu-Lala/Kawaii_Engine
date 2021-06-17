@@ -7,25 +7,10 @@
 
 kawe::EventProvider *kawe::EventProvider::s_instance = nullptr;
 
-kawe::EventProvider::EventProvider() { s_instance = this; }
-
-auto kawe::EventProvider::assign(const Window &window) -> void
+kawe::EventProvider::EventProvider(const Window &window) : m_window{window}
 {
-    ::glfwSetWindowCloseCallback(window.get(), callback_eventClose);
-    ::glfwSetWindowSizeCallback(window.get(), callback_eventResized);
-    ::glfwSetWindowPosCallback(window.get(), callback_eventMoved);
-    ::glfwSetKeyCallback(window.get(), callback_eventKeyBoard);
-    ::glfwSetMouseButtonCallback(window.get(), callback_eventMousePressed);
-    ::glfwSetCursorPosCallback(window.get(), callback_eventMouseMoved);
-    ::glfwSetCharCallback(window.get(), callback_char);
-    ::glfwSetScrollCallback(window.get(), callback_scroll);
-
-    // glfwSetJoystickCallback(joystick_configuration_change_handler);
-    // glfwSetFramebufferSizeCallback(window, framebuffer_size_handler);
-    // glfwSetWindowIconifyCallback(window, window_iconify_handler);
-    // glfwSetWindowFocusCallback(window, window_focus_handler);
-    // glfwSetErrorCallback(error_handler);
-
+    s_instance = this;
+    setState(State::RECORD);
     m_buffer_events.emplace_back(event::Connected<event::Window>{});
 }
 
@@ -36,9 +21,8 @@ auto kawe::EventProvider::getNextEvent() -> event::Event
     if (!m_events_processed.empty()) {
         // post processing to merge the event for example
         std::visit(
-            overloaded{
-                [](event::TimeElapsed &prev, const event::TimeElapsed &next) { prev += next; },
-                [&](const auto &, const auto &next) { m_events_processed.push_back(next); }},
+            overloaded{// [](event::TimeElapsed &prev, const event::TimeElapsed &next) { prev += next; },
+                       [&](const auto &, const auto &next) { m_events_processed.push_back(next); }},
             m_events_processed.back(),
             event);
     } else {
@@ -64,6 +48,8 @@ auto kawe::EventProvider::fetchEvent() -> event::Event
     ::glfwPollEvents();
 
     if (m_buffer_events.empty()) {
+        if (m_state == State::PLAYBACK) { setState(State::RECORD); }
+
         const auto elapsed = getElapsedTime();
         return event::TimeElapsed{
             std::chrono::nanoseconds{static_cast<std::int64_t>(static_cast<double>(elapsed.count()))},

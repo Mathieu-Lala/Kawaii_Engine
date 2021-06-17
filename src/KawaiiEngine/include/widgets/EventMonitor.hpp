@@ -1,7 +1,10 @@
 #pragma once
 
+#include <ImGuiFileDialog.h>
+
 #include "EventProvider.hpp"
 #include "json/SerializeEvent.hpp"
+#include "helpers/TimeToString.hpp"
 
 namespace kawe {
 
@@ -17,9 +20,17 @@ struct EventMonitor {
     {
         if (!ImGui::Begin("KAWE: Events Monitor")) return ImGui::End();
 
+        ImGuiHelper::Text("Provider State: {}", magic_enum::enum_name(provider.getState()).data());
 
         ImGui::PlotLines(
-            "", times_plot.data(), times_plot.size(), 0, "Average nanoseconds", 0.0f, 10'000'000.0f, ImVec2(0, 80.0f));
+            "",
+            times_plot.data(),
+            static_cast<int>(times_plot.size()),
+            0,
+            "Average nanoseconds",
+            0.0f,
+            10'000'000.0f,
+            ImVec2(0, 80.0f));
 
         auto v = static_cast<float>(provider.getTimeScaler());
         if (ImGui::SliderFloat("World Time Speed", &v, 0.0f, 10.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) {
@@ -32,42 +43,44 @@ struct EventMonitor {
             if (last_time_elapsed.has_value()) {
                 nlohmann::json as_json;
                 to_json(as_json, *last_time_elapsed.value());
-                ImGui::Text("Last Time Elapsed :\n%s", as_json.dump(4).data());
+                ImGuiHelper::Text("Last Time Elapsed :\n{}", as_json.dump(4).data());
             }
         }
         ImGui::Separator();
+        ImGuiHelper::Text("Number of Event pending: {}", provider.getEventsPending().size());
+        ImGuiFileDialog::Instance()->SetExtentionInfos(".json", ImVec4(1.0f, 1.0f, 0.0f, 0.9f));
 
-        ImGui::Text("Number of Event pending: %ld", provider.getEventsPending().size());
-        ImGui::Text("Number of Event processed: %ld", provider.getEventsProcessed().size());
-        if (ImGui::Button("clear")) { provider.clear(); }
+        if (ImGui::Button("import"))
+            ImGuiFileDialog::Instance()->OpenDialog("kawe::inspect::event::pending", "Choose File", ".json", ".");
 
+        if (ImGuiFileDialog::Instance()->Display("kawe::inspect::event::pending")) {
+            if (ImGuiFileDialog::Instance()->IsOk()) {
+                const auto path = ImGuiFileDialog::Instance()->GetFilePathName();
 
-        /*
-                ImGui::Text("Event mode : %s", magic_enum::enum_name(m_event_mnager.getMode()).data());
-                ImGui::SameLine();
+                std::ifstream ifs(path);
+                if (ifs.is_open()) {
+                    const auto j = nlohmann::json::parse(ifs);
 
-                {
-                    const auto filepath = "assets/image/hud/button/record.png";
-                    const auto uid_texture = entt::hashed_string{fmt::format("core::image/{}",
-           filepath).data()}; if (const auto image = m_cache_texture.load<LoaderImage>(uid_texture, filepath);
-           image) { if (ImGui::ImageButton(reinterpret_cast<ImTextureID>(image->id), ImVec2(20, 20))) {
-                            provider.setMode(EventManager::Mode::RECORD);
-                        }
-                    }
-                }
-                ImGui::SameLine();
-
-        {
-            const auto filepath = "assets/image/hud/button/play.png";
-            const auto uid_texture = entt::hashed_string{fmt::format("core::image/{}", filepath).data()};
-            if (const auto image = m_cache_texture.load<LoaderImage>(uid_texture, filepath); image) {
-                if (ImGui::ImageButton(reinterpret_cast<ImTextureID>(image->id), ImVec2(20, 20))) {
-                    m_event_manager.setMode(EventManager::Mode::PLAYBACK);
+                    provider.setPendingEvents(j.get<std::vector<event::Event>>());
+                    provider.setState(EventProvider::State::PLAYBACK);
+                } else {
+                    spdlog::warn("EventMonitor failed to open file: {}", path);
                 }
             }
-        }
-*/
 
+            ImGuiFileDialog::Instance()->Close();
+        }
+
+        ImGui::Separator();
+        ImGuiHelper::Text("Number of Event processed: {}", provider.getEventsProcessed().size());
+        if (ImGui::Button("clear")) { provider.clear(); }
+        if (ImGui::Button("export")) {
+            // todo : shoudl be in a async call ?
+            nlohmann::json serialized(provider.getEventsProcessed());
+            std::filesystem::create_directories("logs");
+            std::ofstream f{fmt::format("logs/recorded_events_{}.json", time_to_string())};
+            f << serialized;
+        }
         ImGui::Separator();
         {
             const auto last_not_time_elapsed = provider.getLastEventWhere(
@@ -76,7 +89,7 @@ struct EventMonitor {
             if (last_not_time_elapsed.has_value()) {
                 nlohmann::json as_json;
                 to_json(as_json, *last_not_time_elapsed.value());
-                ImGui::Text("Last event :\n%s", as_json.dump(4).data());
+                ImGuiHelper::Text("Last event :\n{}", as_json.dump(4).data());
             }
         }
 
@@ -93,7 +106,7 @@ private:
         if (times.size() > 100) { times.pop_front(); }
 
         times_plot.clear();
-        for (const auto &i : times) { times_plot.push_back(i.elapsed.count()); }
+        for (const auto &i : times) { times_plot.push_back(static_cast<float>(i.elapsed.count())); }
     }
 };
 
