@@ -317,6 +317,9 @@ private:
             });
         }
 
+        // updating clocks.
+        world.view<Clock>().each([&e](Clock &clock) { clock.on_update(e); });
+
         // note : is it the best way of doing that ?
         for (const auto &entity : world.view<Velocity3f, CameraData>()) {
             const auto &vel = world.get<Velocity3f>(entity);
