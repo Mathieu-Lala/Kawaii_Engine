@@ -53,12 +53,19 @@ jobs:
         env:
           CC: gcc-${{env.GCC_COMPILER_VERSION}}
           CXX: g++-${{env.GCC_COMPILER_VERSION}}
+          CONAN_SYSREQUIRES_MODE: enabled
         if: runner.os != 'Windows'
-        run: cmake -B ${{github.workspace}}/build/${{env.CMAKE_BUILD_TYPE}} -DCMAKE_BUILD_TYPE=${{env.CMAKE_BUILD_TYPE}}
+        run: |
+          export PATH="$PATH:$HOME/.local/bin"
+          cmake -B ${{github.workspace}}/build/${{env.CMAKE_BUILD_TYPE}} -DCMAKE_BUILD_TYPE=${{env.CMAKE_BUILD_TYPE}}
 
       - name: CMake Configure (Windows)
+        env:
+          CONAN_SYSREQUIRES_MODE: enabled
         if: runner.os == 'Windows'
-        run: cmake -B ${{github.workspace}}/build/${{env.CMAKE_BUILD_TYPE}} -DCMAKE_BUILD_TYPE=${{env.CMAKE_BUILD_TYPE}}
+        run: |
+          export PATH="$PATH:$HOME/.local/bin"
+          cmake -B ${{github.workspace}}/build/${{env.CMAKE_BUILD_TYPE}} -DCMAKE_BUILD_TYPE=${{env.CMAKE_BUILD_TYPE}}
 
       - name: CMake Build
         run: cmake --build ${{github.workspace}}/build/${{env.CMAKE_BUILD_TYPE}} --config ${{env.CMAKE_BUILD_TYPE}}
