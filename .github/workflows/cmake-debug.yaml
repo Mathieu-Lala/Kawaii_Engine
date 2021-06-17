@@ -10,6 +10,9 @@ on:
     branches:
       - '**'
 
+env:
+  CMAKE_BUILD_TYPE: Release
+
 jobs:
   build:
     strategy:
@@ -38,5 +41,10 @@ jobs:
           architecture: x64
 
       - name: Hello world
-        shell: bash
         run: echo "Hello world"
+
+      - name: CMake Configure
+        run: cmake -B ${{github.workspace}}/build/${{env.CMAKE_BUILD_TYPE}} -DCMAKE_BUILD_TYPE=${{env.CMAKE_BUILD_TYPE}}
+
+      - name: CMake Build
+        run: cmake --build ${{github.workspace}}/build/${{env.CMAKE_BUILD_TYPE}} --config ${{env.CMAKE_BUILD_TYPE}}
