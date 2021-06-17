@@ -2,9 +2,13 @@ name: CMake Debug
 
 on:
   push:
-    branches: [ $default-branch ]
+    branches-ignore:
+      - 'doc/**'
+      - 'tmp/**'
+      - 'experimental/**'
   pull_request:
-    branches: [ $default-branch ]
+    branches:
+      - '**'
 
 jobs:
   build:
