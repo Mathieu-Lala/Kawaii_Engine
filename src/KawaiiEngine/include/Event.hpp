@@ -9,6 +9,8 @@
 
 namespace kawe {
 
+namespace event {
+
 // Event Helper
 
 template<typename Source>
@@ -28,8 +30,10 @@ struct Released {
 template<typename Source>
 struct Moved {
     constexpr static std::string_view name{"Moved"};
-    constexpr static std::array elements{std::string_view{"source"}};
+    constexpr static std::array elements{std::string_view{"source"}, std::string_view{"x"}, std::string_view{"y"}};
     Source source;
+    double x;
+    double y;
 };
 
 template<typename Source>
@@ -50,14 +54,10 @@ struct Disconnected {
 
 /// Window Related
 
-struct CloseWindow { // note : should be Disonnected<Window>
+struct Window {
     constexpr static std::string_view name{"CloseWindow"};
-    constexpr static std::array<std::string_view, 0> elements{};
-};
-
-struct OpenWindow { // note : should be Connected<Window>
-    constexpr static std::string_view name{"OpenWindow"};
-    constexpr static std::array<std::string_view, 0> elements{};
+    constexpr static auto elements = std::to_array<std::string_view>({"id"});
+    int id;
 };
 
 struct ResizeWindow {
@@ -67,17 +67,18 @@ struct ResizeWindow {
     int height;
 };
 
-struct MoveWindow { // note : could use Moved<Window> ?
-    constexpr static std::string_view name{"MoveWindow"};
-    constexpr static auto elements = std::to_array<std::string_view>({"x", "y"});
-    int x;
-    int y;
-};
-
 struct TimeElapsed {
     constexpr static std::string_view name{"TimeElapsed"};
-    constexpr static std::array elements{std::string_view{"elapsed"}};
+    constexpr static auto elements = std::to_array<std::string_view>({"elapsed", "world_time"});
     std::chrono::steady_clock::duration elapsed;
+    std::chrono::steady_clock::duration world_time;
+
+    auto operator+=(const TimeElapsed &other) -> TimeElapsed &
+    {
+        elapsed += other.elapsed;
+        world_time += other.world_time;
+        return *this;
+    }
 };
 
 /// Device Related
@@ -227,9 +228,7 @@ struct Key {
 
 struct Mouse {
     constexpr static std::string_view name{"Mouse"};
-    constexpr static auto elements = std::to_array<std::string_view>({"x", "y"});
-    double x;
-    double y;
+    constexpr static std::array<std::string_view, 0> elements{};
 };
 
 struct MouseButton {
@@ -258,6 +257,13 @@ struct MouseButton {
 
     Button button;
     Mouse mouse;
+};
+
+struct MouseScroll {
+    constexpr static std::string_view name{"MouseScroll"};
+    constexpr static auto elements = std::to_array<std::string_view>({"x", "y"});
+    double x;
+    double y;
 };
 
 struct Character {
@@ -343,10 +349,10 @@ struct JoystickButton {
 using Event = std::variant<
     std::monostate,
 
-    OpenWindow,
-    CloseWindow,
+    Connected<Window>,
+    Disconnected<Window>,
+    Moved<Window>,
     ResizeWindow,
-    MoveWindow,
 
     TimeElapsed,
 
@@ -357,6 +363,7 @@ using Event = std::variant<
     Moved<Mouse>,
     Pressed<MouseButton>,
     Released<MouseButton>,
+    MouseScroll,
 
     Connected<Joystick>,
     Disconnected<Joystick>,
@@ -366,5 +373,7 @@ using Event = std::variant<
     Moved<JoystickAxis>
 
     >;
+
+} // namespace event
 
 } // namespace kawe

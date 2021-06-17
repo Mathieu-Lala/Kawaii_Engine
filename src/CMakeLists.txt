@@ -1,1 +1,4 @@
+add_subdirectory(imgui)
+add_subdirectory(glfw_imgui_opengl3)
+add_subdirectory(ImGuiFileDialog)
 add_subdirectory(KawaiiEngine)

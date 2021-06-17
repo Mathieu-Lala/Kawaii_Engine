@@ -1,7 +1,6 @@
-#include <imgui.h>
-
 #include <spdlog/spdlog.h>
 
+#include "graphics/deps.hpp"
 #include <ImGuiFileDialog.h>
 
 #include "helpers/macro.hpp"
@@ -83,7 +82,7 @@ template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Texture2D &texture) const
     -> void
 {
-    ImGui::Text("path: %s", texture.filepath.data());
+    ImGuiHelper::Text("path: {}", texture.filepath.data());
 
     ImGuiFileDialog::Instance()->SetExtentionInfos(".png", ImVec4(1.0f, 1.0f, 0.0f, 0.9f));
     ImGuiFileDialog::Instance()->SetExtentionInfos(".jpg", ImVec4(1.0f, 1.0f, 0.0f, 0.9f));
@@ -333,9 +332,9 @@ template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Mesh &mesh) const
     -> void
 {
-    ImGui::Text("path: %s", mesh.filepath.c_str());
-    ImGui::Text("model: %s", mesh.model_name.c_str());
-    ImGui::Text("loaded successfully: %s", mesh.loaded_successfully ? "Yes" : "No");
+    ImGuiHelper::Text("path: {}", mesh.filepath.c_str());
+    ImGuiHelper::Text("model: {}", mesh.model_name.c_str());
+    ImGuiHelper::Text("loaded successfully: {}", mesh.loaded_successfully ? "Yes" : "No");
 
     ImGuiFileDialog::Instance()->SetExtentionInfos(".obj", ImVec4(1.0f, 1.0f, 0.0f, 0.9f));
 
@@ -362,8 +361,8 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt:
 template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &, entt::entity, const AABB &aabb) const -> void
 {
-    ImGui::Text(fmt::format("min: {{.x: {}, .y: {}, .z: {}}}", aabb.min.x, aabb.min.y, aabb.min.z).data());
-    ImGui::Text(fmt::format("max: {{.x: {}, .y: {}, .z: {}}}", aabb.max.x, aabb.max.y, aabb.max.z).data());
+    ImGuiHelper::Text("min: {{.x: {}, .y: {}, .z: {}}}", aabb.min.x, aabb.min.y, aabb.min.z);
+    ImGuiHelper::Text("max: {{.x: {}, .y: {}, .z: {}}}", aabb.max.x, aabb.max.y, aabb.max.z);
 }
 
 template<>
@@ -371,15 +370,15 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &, entt::enti
     -> void
 {
     constexpr auto enum_name = magic_enum::enum_type_name<Collider::CollisionStep>();
-    ImGui::Text(fmt::format("{} = {}", enum_name.data(), magic_enum::enum_name(collider.step)).data());
+    ImGuiHelper::Text("{} = {}", enum_name.data(), magic_enum::enum_name(collider.step));
 }
 
 template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity, const Parent &parent) const
     -> void
 {
-    ImGui::Text(
-        "parent = '%s'",
+    ImGuiHelper::Text(
+        "parent = '{}'",
         world.valid(parent.component) ? world.get<Name>(parent.component).component.data() : "null");
 }
 
@@ -392,20 +391,132 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt:
     } else {
         int it = 0;
         for (const auto &i : children.component) {
-            ImGui::Text("children[%d] = '%s'", it++, world.get<Name>(i).component.data());
+            ImGuiHelper::Text("children[{}] = '{}'", it++, world.get<Name>(i).component.data());
         }
     }
 }
 
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const CameraData &camera) const
+    -> void
+{
+    static constexpr auto epsilon = 0.0001f;
+
+    // todo : improve me
+    {
+        bool viewport_updated = false;
+
+        Rect4<float> temp = {
+            .x = camera.viewport.x,
+            .y = 1.0f - camera.viewport.y,
+            .w = camera.viewport.w,
+            .h = 1.0f - camera.viewport.h};
+
+        ImGui::Dummy(ImVec2(18 * 2 + 4, 18));
+        ImGui::SameLine();
+        ImGui::PushItemWidth(160);
+        viewport_updated |= ImGui::SliderFloat("##viewport.x", &temp.x, 0.0f, 1.0f, "");
+        ImGui::PopItemWidth();
+
+        ImGui::Dummy(ImVec2(18 * 2 + 4, 18));
+        ImGui::SameLine();
+        ImGui::PushItemWidth(160);
+        viewport_updated |= ImGui::SliderFloat("##viewport.w", &temp.w, 0.0f, 1.0f, "");
+        ImGui::PopItemWidth();
+
+        viewport_updated |= ImGui::VSliderFloat("##viewport.y", ImVec2(18, 160), &temp.y, epsilon, 1.0f, "");
+        temp.y = 1.0f - temp.y;
+        ImGui::SameLine();
+        viewport_updated |= ImGui::VSliderFloat("##viewport.h", ImVec2(18, 160), &temp.h, epsilon, 1.0f, "");
+        temp.h = 1.0f - temp.h;
+
+        ImGui::SameLine();
+        const auto old_cursor = ImGui::GetCursorPos();
+
+        ImGui::SetCursorPos(ImVec2(old_cursor.x + temp.x * 160, old_cursor.y + temp.y * 160));
+        ImGui::Button(
+            "A", ImVec2(std::max(epsilon, temp.w - temp.x) * 160, std::max(epsilon, temp.h - temp.y) * 160));
+        ImGui::SetCursorPosY(old_cursor.y + 160 + 4);
+
+        if (viewport_updated) {
+            world.patch<CameraData>(e, [&temp](auto &c) {
+                c.viewport = Rect4<float>{
+                    .x = temp.x,
+                    .y = temp.y,
+                    .w = temp.w,
+                    .h = temp.h,
+                };
+            });
+        }
+    }
+    ImGui::Separator();
+
+    ImGui::PushItemWidth(150);
+    {
+        auto fov_temp = static_cast<float>(camera.fov);
+        if (ImGui::DragFloat(
+                "fov", &fov_temp, 1.0f, epsilon, 180.0f - epsilon, "%.3f", ImGuiSliderFlags_Logarithmic)) {
+            world.patch<CameraData>(e, [&fov_temp](auto &c) { c.fov = fov_temp; });
+        }
+    }
+    ImGui::SameLine();
+    {
+        auto near_temp = static_cast<float>(camera.near);
+        if (ImGui::DragFloat("near", &near_temp, 1.0f, epsilon, static_cast<float>(camera.far) - epsilon)) {
+            world.patch<CameraData>(e, [&near_temp](auto &c) { c.near = near_temp; });
+        }
+    }
+    ImGui::SameLine();
+    {
+        auto far_temp = static_cast<float>(camera.far);
+        if (ImGui::DragFloat(
+                "far",
+                &far_temp,
+                1.0f,
+                static_cast<float>(camera.near) + epsilon,
+                1'000'000.0f,
+                "%.3f",
+                ImGuiSliderFlags_Logarithmic)) {
+            world.patch<CameraData>(e, [&far_temp](auto &c) { c.far = far_temp; });
+        }
+    }
+    ImGui::PopItemWidth();
+
+    ImGui::Separator();
+
+    ImGuiHelper::Text(
+        "target position: {{.x: {}, .y: {}, .z: {}}}",
+        camera.target_center.x,
+        camera.target_center.y,
+        camera.target_center.z);
+
+    // read only data
+
+    ImGuiHelper::Text("display: {{.x: {}, .y: {}}}", camera.display.x, camera.display.y);
+
+    ImGuiHelper::Text(
+        "plan vert: {{.x: {}, .y: {}, .z: {}}}",
+        camera.imagePlaneVertDir.x,
+        camera.imagePlaneVertDir.y,
+        camera.imagePlaneVertDir.z);
+
+    ImGuiHelper::Text(
+        "plan horz: {{.x: {}, .y: {}, .z: {}}}",
+        camera.imagePlaneHorizDir.x,
+        camera.imagePlaneHorizDir.y,
+        camera.imagePlaneHorizDir.z);
+}
+
 auto kawe::ComponentInspector::draw(entt::registry &world) -> void
 {
-    ImGui::Begin("KAWE: Component Inspector");
+    if (!ImGui::Begin("KAWE: Component Inspector")) return ImGui::End();
 
     ImGui::BeginChild("item view", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()));
-    ImGui::Text(
-        "Entity: %s",
+    ImGuiHelper::Text(
+        "Entity: {}",
         selected.has_value()
-            ? world.get_or_emplace<Name>(selected.value(), fmt::format("<anonymous#{}>", selected.value()))
+            ? world
+                  .get_or_emplace<Name>(selected.value(), fmt::format("<kawe:anonymous#{}>", selected.value()))
                   .component.data()
             : "No entity selected");
 
