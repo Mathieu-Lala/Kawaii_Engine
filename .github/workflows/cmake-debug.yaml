@@ -48,6 +48,11 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip setuptools --user
           pip3 install -r ${{github.workspace}}/requirements.py --user
+          conan profile update settings.compiler.libcxx=libstdc++11 default
+        if: runner.os != 'Windows'
+        run: echo "${HOME}/.local/bin" >> $GITHUB_PATH
+        if: runner.os == 'Windows'
+        run: echo "${HOME}/.local/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: CMake Configure (!Windows)
         env:
@@ -55,17 +60,13 @@ jobs:
           CXX: g++-${{env.GCC_COMPILER_VERSION}}
           CONAN_SYSREQUIRES_MODE: enabled
         if: runner.os != 'Windows'
-        run: |
-          export PATH="$PATH:$HOME/.local/bin"
-          cmake -B ${{github.workspace}}/build/${{env.CMAKE_BUILD_TYPE}} -DCMAKE_BUILD_TYPE=${{env.CMAKE_BUILD_TYPE}}
+        run: cmake -B ${{github.workspace}}/build/${{env.CMAKE_BUILD_TYPE}} -DCMAKE_BUILD_TYPE=${{env.CMAKE_BUILD_TYPE}}
 
       - name: CMake Configure (Windows)
         env:
           CONAN_SYSREQUIRES_MODE: enabled
         if: runner.os == 'Windows'
-        run: |
-          export PATH="$PATH:$HOME/.local/bin"
-          cmake -B ${{github.workspace}}/build/${{env.CMAKE_BUILD_TYPE}} -DCMAKE_BUILD_TYPE=${{env.CMAKE_BUILD_TYPE}}
+        run: cmake -B ${{github.workspace}}/build/${{env.CMAKE_BUILD_TYPE}} -DCMAKE_BUILD_TYPE=${{env.CMAKE_BUILD_TYPE}}
 
       - name: CMake Build
         run: cmake --build ${{github.workspace}}/build/${{env.CMAKE_BUILD_TYPE}} --config ${{env.CMAKE_BUILD_TYPE}}
