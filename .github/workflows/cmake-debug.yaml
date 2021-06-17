@@ -6,9 +6,9 @@ on:
       - 'doc/**'
       - 'tmp/**'
       - 'experimental/**'
-  pull_request:
-    branches:
-      - '**'
+#  pull_request:
+#    branches:
+#      - '**'
 
 env:
   CMAKE_BUILD_TYPE: Release
@@ -42,6 +42,11 @@ jobs:
 
       - name: Hello world
         run: echo "Hello world"
+
+      - name: Install Conan
+        run:
+          - python3 -m pip install --upgrade pip setuptools --user
+          - pip3 install -r ${{github.workspace}}/requirements.py --user
 
       - name: CMake Configure
         run: cmake -B ${{github.workspace}}/build/${{env.CMAKE_BUILD_TYPE}} -DCMAKE_BUILD_TYPE=${{env.CMAKE_BUILD_TYPE}}
