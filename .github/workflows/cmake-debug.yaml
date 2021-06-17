@@ -12,6 +12,7 @@ on:
 
 env:
   CMAKE_BUILD_TYPE: Release
+  GCC_COMPILER_VERSION: 10
 
 jobs:
   build:
@@ -48,7 +49,15 @@ jobs:
           python3 -m pip install --upgrade pip setuptools --user
           pip3 install -r ${{github.workspace}}/requirements.py --user
 
-      - name: CMake Configure
+      - name: CMake Configure (!Windows)
+        env:
+          CC: gcc-${{env.GCC_COMPILER_VERSION}}
+          CXX: g++-${{env.GCC_COMPILER_VERSION}}
+        if: runner.os != 'Windows'
+        run: cmake -B ${{github.workspace}}/build/${{env.CMAKE_BUILD_TYPE}} -DCMAKE_BUILD_TYPE=${{env.CMAKE_BUILD_TYPE}}
+
+      - name: CMake Configure (Windows)
+        if: runner.os == 'Windows'
         run: cmake -B ${{github.workspace}}/build/${{env.CMAKE_BUILD_TYPE}} -DCMAKE_BUILD_TYPE=${{env.CMAKE_BUILD_TYPE}}
 
       - name: CMake Build
