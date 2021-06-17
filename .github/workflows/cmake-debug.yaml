@@ -21,7 +21,8 @@ jobs:
       matrix:
         os: [
           ubuntu-latest,
-          macos-latest,
+          # See https://github.com/Mathieu-Lala/Kawaii_Engine/runs/2847175086?check_suite_focus=true
+          # macos-latest,
           windows-latest
         ]
 
@@ -50,10 +51,6 @@ jobs:
           pip3 install -r ${{github.workspace}}/requirements.py --user
           echo "${HOME}/.local/bin" >> $GITHUB_PATH
 # conan profile update settings.compiler.libcxx=libstdc++11 default
-
-        #if: runner.os != 'Windows'
-        # if: runner.os == 'Windows'
-        # run: echo "${HOME}/.local/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: CMake Configure (!Windows)
         env:
