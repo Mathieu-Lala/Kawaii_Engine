@@ -45,6 +45,8 @@ struct State {
         for (const auto &i : magic_enum::enum_values<event::Key::Code>()) { keyboard_state[i] = false; }
     }
 
+    ~State(){ spdlog::warn("warning, state destructor."); }
+
     std::vector<std::unique_ptr<ShaderProgram>> shaders;
 
     glm::vec4 clear_color{0.0f, 1.0f, 0.2f, 1.0f};

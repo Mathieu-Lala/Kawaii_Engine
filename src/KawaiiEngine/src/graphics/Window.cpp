@@ -6,6 +6,8 @@
 
 kawe::Window::Window(const std::string_view window_title, glm::ivec2 &&size, glm::ivec2 &&position, bool isFullscreen)
 {
+    spdlog::debug("starting window initialiser.");
+
     if (isFullscreen) {
         GLFWmonitor *primary = glfwGetPrimaryMonitor();
         const GLFWvidmode *mode = glfwGetVideoMode(primary);
@@ -28,6 +30,8 @@ kawe::Window::Window(const std::string_view window_title, glm::ivec2 &&size, glm
 
     isWindowIconofied = glfwGetWindowAttrib(window, GLFW_ICONIFIED);
     isWindowFocused = glfwGetWindowAttrib(window, GLFW_FOCUSED);
+
+    spdlog::debug("window initialized.");
 
     // current_window_size = get_window_size();
 }

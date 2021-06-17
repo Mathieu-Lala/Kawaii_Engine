@@ -1,0 +1,70 @@
+name: CMake Debug
+
+on:
+  push:
+    branches-ignore:
+      - 'doc/**'
+      - 'tmp/**'
+      - 'experimental/**'
+#  pull_request:
+#    branches:
+#      - '**'
+
+env:
+  CMAKE_BUILD_TYPE: Release
+  GCC_COMPILER_VERSION: 10
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [
+          ubuntu-latest,
+          # See https://github.com/Mathieu-Lala/Kawaii_Engine/runs/2847175086?check_suite_focus=true
+          # macos-latest,
+          windows-latest
+        ]
+
+    runs-on: ${{ matrix.os }}
+
+# https://github.com/marketplace/actions/checkout
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+
+# https://github.com/marketplace/actions/setup-python
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+          architecture: x64
+
+      - name: Hello world
+        run: echo "Hello world"
+
+      - name: Install Conan
+        run: |
+          python3 -m pip install --upgrade pip setuptools --user
+          pip3 install -r ${{github.workspace}}/requirements.py --user
+          echo "${HOME}/.local/bin" >> $GITHUB_PATH
+# conan profile update settings.compiler.libcxx=libstdc++11 default
+
+      - name: CMake Configure (!Windows)
+        env:
+          CC: gcc-${{env.GCC_COMPILER_VERSION}}
+          CXX: g++-${{env.GCC_COMPILER_VERSION}}
+          CONAN_SYSREQUIRES_MODE: enabled
+        if: runner.os != 'Windows'
+        run: cmake -B ${{github.workspace}}/build/${{env.CMAKE_BUILD_TYPE}} -DCMAKE_BUILD_TYPE=${{env.CMAKE_BUILD_TYPE}}
+
+      - name: CMake Configure (Windows)
+        env:
+          CONAN_SYSREQUIRES_MODE: enabled
+        if: runner.os == 'Windows'
+        run: cmake -B ${{github.workspace}}/build/${{env.CMAKE_BUILD_TYPE}} -DCMAKE_BUILD_TYPE=${{env.CMAKE_BUILD_TYPE}}
+
+      - name: CMake Build
+        run: cmake --build ${{github.workspace}}/build/${{env.CMAKE_BUILD_TYPE}} --config ${{env.CMAKE_BUILD_TYPE}}

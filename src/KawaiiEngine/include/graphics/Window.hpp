@@ -58,7 +58,7 @@ private:
 
     bool isWindowIconofied;
     bool isWindowFocused;
-    bool m_should_close;
+    bool m_should_close = false;
 };
 
 } // namespace kawe

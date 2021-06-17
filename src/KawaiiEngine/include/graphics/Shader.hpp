@@ -82,7 +82,11 @@ public:
         }
     }
 
-    ~ShaderProgram() { CALL_OPEN_GL(::glDeleteProgram(program_id)); }
+    ~ShaderProgram()
+    {
+        spdlog::info("program_id: {}", program_id);
+        CALL_OPEN_GL(::glDeleteProgram(program_id));
+    }
 
     auto use() const noexcept -> void { CALL_OPEN_GL(::glUseProgram(program_id)); }
 
