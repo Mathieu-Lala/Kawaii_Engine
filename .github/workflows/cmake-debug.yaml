@@ -49,10 +49,10 @@ jobs:
           python3 -m pip install --upgrade pip setuptools --user
           pip3 install -r ${{github.workspace}}/requirements.py --user
           conan profile update settings.compiler.libcxx=libstdc++11 default
-        if: runner.os != 'Windows'
-        run: echo "${HOME}/.local/bin" >> $GITHUB_PATH
-        if: runner.os == 'Windows'
-        run: echo "${HOME}/.local/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "${HOME}/.local/bin" >> $GITHUB_PATH
+        #if: runner.os != 'Windows'
+        # if: runner.os == 'Windows'
+        # run: echo "${HOME}/.local/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: CMake Configure (!Windows)
         env:
