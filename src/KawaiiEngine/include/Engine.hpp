@@ -88,6 +88,8 @@ public:
 
         glfwSwapInterval(0);
 
+        // rendering backend
+
         world.on_destroy<Render::VAO>().connect<Render::VAO::on_destroy>();
         world.on_destroy<Render::VBO<Render::VAO::Attribute::POSITION>>()
             .connect<Render::VBO<Render::VAO::Attribute::POSITION>::on_destroy>();
@@ -95,18 +97,28 @@ public:
             .connect<Render::VBO<Render::VAO::Attribute::COLOR>::on_destroy>();
         world.on_destroy<Render::EBO>().connect<Render::EBO::on_destroy>();
 
-        world.on_construct<Position3f>().connect<&Engine::update_aabb>(*this);
-        world.on_construct<Position3f>().connect<&Engine::update_aabb>(*this);
-        world.on_construct<Position3f>().connect<&Engine::update_aabb>(*this);
+        // collision update
 
+        world.on_construct<AABB>().connect<&Engine::check_collision>(*this);
+        world.on_update<AABB>().connect<&Engine::check_collision>(*this);
+
+        world.on_construct<Position3f>().connect<&Engine::update_aabb>(*this);
+        world.on_construct<Position3f>().connect<&Engine::update_aabb>(*this);
+        world.on_construct<Position3f>().connect<&Engine::update_aabb>(*this);
         world.on_update<Position3f>().connect<&Engine::update_aabb>(*this);
         world.on_update<Rotation3f>().connect<&Engine::update_aabb>(*this);
         world.on_update<Scale3f>().connect<&Engine::update_aabb>(*this);
 
-        world.on_construct<Collider>().connect<&Engine::update_aabb>(*this);
-
         world.on_construct<Render::VBO<Render::VAO::Attribute::POSITION>>().connect<&Engine::update_aabb>(*this);
         world.on_update<Render::VBO<Render::VAO::Attribute::POSITION>>().connect<&Engine::update_aabb>(*this);
+
+        // create sub entity
+
+        world.on_construct<Collider>().connect<&Engine::update_aabb>(*this);
+
+        world.on_construct<CameraData>().connect<&Engine::create_camera>(*this);
+
+        // update color
 
         world.on_construct<FillColor>().connect<&Engine::update_vbo_color>(*this);
         world.on_update<FillColor>().connect<&Engine::update_vbo_color>(*this);
@@ -114,15 +126,13 @@ public:
         world.on_update<Render::VBO<Render::VAO::Attribute::COLOR>>()
             .connect<[](entt::registry &reg, entt::entity e) -> void { reg.remove_if_exists<FillColor>(e); }>();
 
-        world.on_construct<AABB>().connect<&Engine::check_collision>(*this);
-        world.on_update<AABB>().connect<&Engine::check_collision>(*this);
-
 
         world.on_construct<CameraData>().connect<&Engine::update_camera>(*this);
         world.on_update<CameraData>().connect<&Engine::update_camera>(*this);
+
         dispatcher.sink<event::TimeElapsed>().connect<&Engine::update_camera_event>(*this);
         world.on_update<Position3f>().connect<&Engine::update_camera>(*this);
-
+        world.on_update<Position3f>().connect<&Engine::try_update_camera_target>(*this);
 
         world.set<entt::dispatcher *>(&dispatcher);
         world.set<ResourceLoader *>(&loader);
@@ -353,13 +363,13 @@ private:
         // updating clocks.
         world.view<Clock>().each([&e](Clock &clock) { clock.on_update(e); });
 
-        // note : is it the best way of doing that ?
-        for (const auto &entity : world.view<Velocity3f, CameraData>()) {
-            const auto &vel = world.get<Velocity3f>(entity);
-            world.patch<CameraData>(entity, [&vel, &dt_secs](auto &cam) {
-                cam.target_center += vel.component * static_cast<double>(dt_secs);
-            });
-        }
+        // // note : is it the best way of doing that ?
+        // for (const auto &entity : world.view<Velocity3f, CameraData>()) {
+        //     const auto &vel = world.get<Velocity3f>(entity);
+        //     world.patch<CameraData>(entity, [&vel, &dt_secs](auto &cam) {
+        //         cam.target_center += vel.component * static_cast<double>(dt_secs);
+        //     });
+        // }
 
         for (const auto &entity : world.view<Gravitable3f, Velocity3f>()) {
             const auto &gravity = world.get<Gravitable3f>(entity);
@@ -413,19 +423,40 @@ private:
             }
         };
 
-        const auto viewDir = glm::normalize(cam->target_center - pos.component);
+        const auto &target_center = reg.get<Position3f>(cam->target).component;
+
+        const auto viewDir = glm::normalize(target_center - pos.component);
 
         cam->imagePlaneVertDir = glm::normalize(makeOrthogonalTo(cam->up, viewDir));
         cam->imagePlaneHorizDir = glm::normalize(glm::cross(viewDir, cam->imagePlaneVertDir));
 
         const auto size = window->getSize<double>() * glm::dvec2{cam->viewport.w, cam->viewport.h};
 
-        cam->display.y = 2.0 * glm::length(cam->target_center - pos.component) * std::tan(0.5 * cam->fov);
+        cam->display.y = 2.0 * glm::length(target_center - pos.component) * std::tan(0.5 * cam->fov);
         cam->display.x = cam->display.y * (size.x / size.y);
 
         cam->projection = glm::perspective(glm::radians(cam->fov), size.x / size.y, cam->near, cam->far);
-        cam->view = glm::lookAt(pos.component, cam->target_center, cam->up);
+        cam->view = glm::lookAt(pos.component, target_center, cam->up);
     };
+
+    auto create_camera(entt::registry &reg, entt::entity e) -> void
+    {
+        const auto child = reg.create();
+        reg.emplace<Position3f>(child);
+        reg.emplace<Parent>(child, e);
+
+        reg.emplace_or_replace<Children>(e).component.push_back(child);
+        reg.get<CameraData>(e).target = child;
+    }
+
+    auto try_update_camera_target(entt::registry &reg, entt::entity e) -> void
+    {
+        if (const auto has_parent = reg.try_get<Parent>(e); has_parent != nullptr) {
+            if (const auto is_camera = reg.try_get<CameraData>(has_parent->component); is_camera != nullptr) {
+                update_camera(reg, has_parent->component);
+            }
+        }
+    }
 
     auto update_camera_event(const event::TimeElapsed &e) -> void
     {

@@ -484,11 +484,10 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt:
 
     ImGui::Separator();
 
+    const auto &target_center = world.get<Position3f>(camera.target).component;
+
     ImGuiHelper::Text(
-        "target position: {{.x: {}, .y: {}, .z: {}}}",
-        camera.target_center.x,
-        camera.target_center.y,
-        camera.target_center.z);
+        "target position: {{.x: {}, .y: {}, .z: {}}}", target_center.x, target_center.y, target_center.z);
 
     // read only data
 
