@@ -22,16 +22,26 @@ using namespace std::chrono_literals;
 
 namespace kawe {
 
-struct Children {
-    static constexpr std::string_view name{"Children"};
-
-    std::vector<entt::entity> component;
-};
-
 struct Parent {
     static constexpr std::string_view name{"Parent"};
 
     entt::entity component{entt::null};
+};
+
+struct Children {
+    static constexpr std::string_view name{"Children"};
+
+    std::vector<entt::entity> component;
+
+    static auto emplace(entt::registry &world, entt::entity e, const std::vector<entt::entity> &children)
+        -> Children &
+    {
+        std::for_each(children.begin(), children.end(), [&world, &e](const auto &child) {
+            world.emplace<Parent>(child, e);
+        });
+
+        return world.emplace<Children>(e, children);
+    }
 };
 
 struct Name {
