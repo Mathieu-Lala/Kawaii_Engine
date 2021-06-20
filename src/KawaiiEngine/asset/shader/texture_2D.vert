@@ -9,13 +9,10 @@ uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
 
-vec3 sceneLightPos = vec3(3.0, 3.0, 3.0);
-
 out vec3 fragPos;
 out vec4 fragColors;
 out vec2 fragTexCoord;
 out vec3 fragNormal;
-out vec3 fragLightPos;
 
 void main()
 {
@@ -24,5 +21,4 @@ void main()
     fragColors = inColors;
     fragTexCoord = inTexCoord;
     fragNormal = mat3(transpose(inverse(view * model))) * inNormals;
-    fragLightPos = vec3(view * vec4(sceneLightPos, 1.0));
 }
