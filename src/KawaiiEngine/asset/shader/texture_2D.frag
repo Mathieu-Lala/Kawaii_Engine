@@ -53,5 +53,5 @@ void main()
     }
 
     vec4 result = vec4(finalColor, opacity) * fragColors;
-    outColor = texture(texSampler, fragTexCoord) * result;
+    outColor = texture2D(texSampler, fragTexCoord) * result;
 }
