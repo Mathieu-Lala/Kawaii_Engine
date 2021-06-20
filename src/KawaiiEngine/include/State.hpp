@@ -33,7 +33,6 @@ struct State {
         shaders.emplace_back(std::make_unique<ShaderProgram>(
             "normal", std::vector<uint32_t>{normal_vert->shader_id, normal_frag->shader_id}));
 
-
         const auto picking_frag = world.ctx<ResourceLoader *>()->load<Shader>("./asset/shader/picking.vert");
         const auto picking_vert = world.ctx<ResourceLoader *>()->load<Shader>("./asset/shader/picking.frag");
 
@@ -45,7 +44,7 @@ struct State {
         for (const auto &i : magic_enum::enum_values<event::Key::Code>()) { keyboard_state[i] = false; }
     }
 
-    ~State(){ spdlog::warn("warning, state destructor."); }
+    ~State() { spdlog::warn("warning, state destructor."); }
 
     std::vector<std::unique_ptr<ShaderProgram>> shaders;
 
