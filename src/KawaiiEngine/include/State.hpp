@@ -38,6 +38,18 @@ struct State {
 
         shaders.emplace_back(std::make_unique<ShaderProgram>(
             "picking", std::vector<uint32_t>{picking_vert->shader_id, picking_frag->shader_id}));
+
+
+        const auto texture_2D_emissif_frag =
+            world.ctx<ResourceLoader *>()->load<Shader>("./asset/shader/texture_2D_emissif.vert");
+        const auto texture_2D_emissif_vert =
+            world.ctx<ResourceLoader *>()->load<Shader>("./asset/shader/texture_2D_emissif.frag");
+
+        shaders.emplace_back(std::make_unique<ShaderProgram>(
+            "texture_2D_emissif",
+            std::vector<uint32_t>{texture_2D_emissif_vert->shader_id, texture_2D_emissif_frag->shader_id}));
+
+
         for (const auto &i : magic_enum::enum_values<event::MouseButton::Button>()) {
             state_mouse_button[i] = false;
         }

@@ -398,6 +398,46 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt:
     }
 }
 
+
+template<>
+auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const PointLight &light) const
+    -> void
+{
+    float intensity_temp = light.intensity;
+    if (ImGui::DragFloat("intensity", &intensity_temp, 1.0f, 0, 100, "%.3f")) {
+        world.patch<PointLight>(e, [&intensity_temp](auto &c) { c.intensity = intensity_temp; });
+    }
+    {
+        float temp[3] = {
+            light.diffuse_color.r,
+            light.diffuse_color.g,
+            light.diffuse_color.b,
+        };
+        if (ImGui::ColorEdit3("diffuse", temp)) {
+            world.patch<PointLight>(e, [&temp](auto &c) {
+                c.diffuse_color.r = temp[0];
+                c.diffuse_color.g = temp[1];
+                c.diffuse_color.b = temp[2];
+            });
+        }
+    }
+    {
+        float temp[3] = {
+            light.specular_color.r,
+            light.specular_color.g,
+            light.specular_color.b,
+        };
+        if (ImGui::ColorEdit3("specular", temp)) {
+            world.patch<PointLight>(e, [&temp](auto &c) {
+                c.specular_color.r = temp[0];
+                c.specular_color.g = temp[1];
+                c.specular_color.b = temp[2];
+            });
+        }
+    }
+}
+
+
 template<>
 auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const CameraData &camera) const
     -> void
@@ -485,11 +525,6 @@ auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt:
     ImGui::PopItemWidth();
 
     ImGui::Separator();
-
-    const auto &target_center = world.get<Position3f>(camera.target).component;
-
-    ImGuiHelper::Text(
-        "target position: {{.x: {}, .y: {}, .z: {}}}", target_center.x, target_center.y, target_center.z);
 
     // read only data
 
