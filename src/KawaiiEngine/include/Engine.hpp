@@ -160,6 +160,7 @@ public:
 
     std::function<void()> on_imgui;
     std::function<void(entt::registry &)> on_create;
+    bool render_internal_gui = true;
 
     auto start()
     {
@@ -387,12 +388,15 @@ private:
 
         draw_docking_window();
         {
-            ImGui::ShowDemoWindow();
             on_imgui();
-            entity_hierarchy.draw(world);
-            component_inspector.draw<Component>(world);
-            event_monitor->draw();
-            recorder->draw();
+
+            if (render_internal_gui) {
+                ImGui::ShowDemoWindow();
+                entity_hierarchy.draw(world);
+                component_inspector.draw<Component>(world);
+                event_monitor->draw();
+                recorder->draw();
+            }
         }
 
         ImGui::Render();
