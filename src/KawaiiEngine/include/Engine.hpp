@@ -390,7 +390,7 @@ private:
             ImGui::ShowDemoWindow();
             on_imgui();
             entity_hierarchy.draw(world);
-            component_inspector.draw(world);
+            component_inspector.draw<Component>(world);
             event_monitor->draw();
             recorder->draw();
         }
