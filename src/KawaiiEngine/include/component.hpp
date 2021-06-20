@@ -552,13 +552,12 @@ struct CameraData {
 
     double fov{45.0};
     double near{0.1};
-    double far{1000.0};
+    double far{10'000.0};
 
     glm::dvec3 imagePlaneHorizDir{};
     glm::dvec3 imagePlaneVertDir{};
     glm::dvec2 display{};
 
-    // glm::dvec3 target_center{0.0, 0.0, 0.0};
     entt::entity target{entt::null};
     glm::dvec3 up{0.0, 1.0, 0.0};
 

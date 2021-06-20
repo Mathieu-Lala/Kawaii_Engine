@@ -33,7 +33,7 @@ struct EventMonitor {
             ImVec2(0, 80.0f));
 
         auto v = static_cast<float>(provider.getTimeScaler());
-        if (ImGui::SliderFloat("World Time Speed", &v, 0.0f, 10.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) {
+        if (ImGui::SliderFloat("World Time Speed", &v, 0.0f, 100.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) {
             provider.setTimeScaler(static_cast<double>(v));
         }
         {
