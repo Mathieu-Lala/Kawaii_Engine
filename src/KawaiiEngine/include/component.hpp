@@ -618,6 +618,27 @@ struct CameraData {
     }
 };
 
+struct PointLight {
+    static constexpr std::string_view name{"Point Light"};
+
+    float intensity;
+
+    glm::dvec3 diffuse_color;
+    glm::dvec3 specular_color;
+
+    static auto emplace(
+        entt::registry &world,
+        entt::entity e,
+        float intensity = 1.f,
+        const glm::vec3 &position = glm::vec3(0.f),
+        const glm::dvec3 &diffuse_color = glm::dvec3(1.f),
+        const glm::dvec3 &specular_color = glm::dvec3(1.f)) -> PointLight &
+    {
+        if (const auto pos = world.try_get<Position3f>(e); !pos) { world.emplace<Position3f>(e, position); }
+        return world.emplace<PointLight>(e, intensity, diffuse_color, specular_color);
+    }
+};
+
 using Component = std::variant<
     std::monostate,
     // system
@@ -645,6 +666,7 @@ using Component = std::variant<
     Collider,
     AABB,
     Clock,
-    Pickable>;
+    Pickable,
+    PointLight>;
 
 } // namespace kawe

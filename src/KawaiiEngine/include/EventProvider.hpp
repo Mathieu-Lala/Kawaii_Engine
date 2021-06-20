@@ -65,7 +65,7 @@ public:
 
         switch (s) {
         case State::RECORD: {
-            spdlog::warn("set the right callbakc");
+            spdlog::warn("");
             ::glfwSetWindowCloseCallback(m_window.get(), callback_eventClose);
             ::glfwSetWindowSizeCallback(m_window.get(), callback_eventResized);
             ::glfwSetWindowPosCallback(m_window.get(), callback_eventMoved);
