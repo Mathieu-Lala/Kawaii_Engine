@@ -38,7 +38,7 @@ public:
         constexpr auto KAWE_GLFW_MINOR = 5;
 
         glfwSetErrorCallback([](int code, const char *message) {
-            spdlog::error("[GLFW] An error occured '{}' 'code={}'\n", message, code);
+            spdlog::error("[GLFW] An error occurred '{}' 'code={}'\n", message, code);
         });
 
 
@@ -58,7 +58,7 @@ public:
         glfwMakeContextCurrent(window->get());
 
         if (const auto err = glewInit(); err != GLEW_OK) {
-            spdlog::error("[GLEW] An error occured '{}' 'code={}'", glewGetErrorString(err), err);
+            spdlog::error("[GLEW] An error occurred '{}' 'code={}'", glewGetErrorString(err), err);
             return;
         }
 
@@ -287,7 +287,7 @@ private:
         Render::VBO<Render::VAO::Attribute::COLOR>::emplace(reg, e, vert, 4);
     };
 
-    // AABB alogrithm = really simple and fast collision detection
+    // AABB algorithm = really simple and fast collision detection
     auto check_collision(entt::registry &reg, entt::entity e) -> void
     {
         const auto aabb = reg.get<AABB>(e);
@@ -394,7 +394,7 @@ private:
             if (render_internal_gui) {
                 ImGui::ShowDemoWindow();
                 entity_hierarchy.draw(world);
-                component_inspector.draw(world);
+                component_inspector.draw<Component>(world);
                 event_monitor->draw();
                 recorder->draw();
             }
@@ -449,6 +449,7 @@ private:
         const auto child = reg.create();
         reg.emplace<Position3f>(child);
         reg.emplace<Parent>(child, e);
+        reg.emplace<Name>(child, fmt::format("<kawe:camera_target#{}>", e));
 
         reg.emplace_or_replace<Children>(e).component.push_back(child);
         reg.get<CameraData>(e).target = child;
@@ -577,9 +578,9 @@ private:
 
                 assert(found != state->shaders.end());
 
-                const double r = (static_cast<int>(e) & 0x000000FF) >> 0;
-                const double g = (static_cast<int>(e) & 0x0000FF00) >> 8;
-                const double b = (static_cast<int>(e) & 0x00FF0000) >> 16;
+                const auto r = static_cast<double>((static_cast<std::uint32_t>(e) & 0x000000FFu) >> 0u);
+                const auto g = static_cast<double>((static_cast<std::uint32_t>(e) & 0x0000FF00u) >> 8u);
+                const auto b = static_cast<double>((static_cast<std::uint32_t>(e) & 0x00FF0000u) >> 16u);
 
                 (*found)->use();
                 (*found)->setUniform("view", cam.view);
@@ -932,29 +933,41 @@ private:
                     component_inspector.selected = {};
                 } else {
                     component_inspector.selected = static_cast<entt::entity>(pickedID);
+                    world.patch<Pickable>(static_cast<entt::entity>(pickedID), [](auto &pickable) {
+                        pickable.is_picked = false;
+                    });
                 }
 
                 // todo : send a signal to the app ?
             }
         }
-        glClearColor(state->clear_color.r, state->clear_color.g, state->clear_color.b, state->clear_color.a);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+// #define SHOW_THE_PICK_IMAGE
+#ifdef SHOW_THE_PICK_IMAGE
+        // this will render during one frame what the engine see when u try to pick an object
+        else {
+#endif
+            glClearColor(state->clear_color.r, state->clear_color.g, state->clear_color.b, state->clear_color.a);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        for (auto &i : world.view<CameraData>()) {
-            const auto &camera = world.get<CameraData>(i);
-            // todo : when resizing the window, the object deform
-            // this doesn t sound kind right ...
-            const auto cam_viewport = camera.viewport;
-            const auto window_size = window->getSize<float>();
-            GLint viewport[4] = {
-                static_cast<GLint>(cam_viewport.x * window_size.x),
-                static_cast<GLint>(cam_viewport.y * window_size.y),
-                static_cast<GLsizei>(cam_viewport.w * window_size.x),
-                static_cast<GLsizei>(cam_viewport.h * window_size.y)};
-            ::glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+            for (auto &i : world.view<CameraData>()) {
+                const auto &camera = world.get<CameraData>(i);
+                // todo : when resizing the window, the object deform
+                // this doesn t sound kind right ...
+                const auto cam_viewport = camera.viewport;
+                const auto window_size = window->getSize<float>();
+                GLint viewport[4] = {
+                    static_cast<GLint>(cam_viewport.x * window_size.x),
+                    static_cast<GLint>(cam_viewport.y * window_size.y),
+                    static_cast<GLsizei>(cam_viewport.w * window_size.x),
+                    static_cast<GLsizei>(cam_viewport.h * window_size.y)};
+                ::glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
 
-            render_all(camera);
+                render_all(camera);
+            }
+
+#ifdef SHOW_THE_PICK_IMAGE
         }
+#endif
     }
 
 }; // namespace kawe

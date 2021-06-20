@@ -539,7 +539,7 @@ struct Clock {
 struct Pickable {
     static constexpr std::string_view name{"Pickable"};
 
-    bool is_picked{false};
+    bool is_picked = false;
 };
 
 struct CameraData {
