@@ -30,6 +30,14 @@ auto kawe::ShaderProgram::setUniform(const std::string_view name, glm::dvec4 vec
 }
 
 template<>
+auto kawe::ShaderProgram::setUniform(const std::string_view name, glm::dvec3 vec) -> void
+{
+    if (const auto location = ::glGetUniformLocation(program_id, name.data()); location != -1)
+        CALL_OPEN_GL(::glUniform3f(
+            location, static_cast<float>(vec.x), static_cast<float>(vec.y), static_cast<float>(vec.z)));
+}
+
+template<>
 auto kawe::ShaderProgram::setUniform(const std::string_view name, glm::mat4 mat) -> void
 {
     if (const auto location = ::glGetUniformLocation(program_id, name.data()); location != -1)
