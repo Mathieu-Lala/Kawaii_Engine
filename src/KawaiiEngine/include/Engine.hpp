@@ -64,6 +64,7 @@ public:
 
         spdlog::info("OpenGL version supported by this platform ({})", glGetString(GL_VERSION));
 
+        glEnable(GL_DEBUG_OUTPUT);
         glDebugMessageCallback(
             []([[maybe_unused]] GLenum source,
                [[maybe_unused]] GLenum type,
@@ -535,14 +536,40 @@ private:
             model = glm::scale(model, scale.component);
 
             if constexpr (!is_pickable) {
-                // note : note optimized at all !!! bad bad bad
+                // note : not optimized at all !!! bad bad bad
                 // or is it ?
                 vao.shader_program->use();
                 vao.shader_program->setUniform("view", cam.view);
                 vao.shader_program->setUniform("projection", cam.projection);
                 vao.shader_program->setUniform("model", model);
 
-                if constexpr (has_texture) { CALL_OPEN_GL(glBindTexture(GL_TEXTURE_2D, texture.textureID)); }
+                if constexpr (has_texture) {
+                    CALL_OPEN_GL(glBindTexture(GL_TEXTURE_2D, texture.textureID));
+
+                    // setting light properties.
+                    auto light_count = static_cast<unsigned int>(world.size<PointLight>());
+                    vao.shader_program->setUniform("lightCount", light_count);
+
+                    if (light_count) {
+                        // ! using fmt, find another way of pushing uniform arrays.
+                        auto lights = world.view<PointLight>();
+                        for (auto it = lights.begin(); it != lights.end(); ++it) {
+                            auto index = it - lights.begin();
+
+                            auto &light_pos = world.get<kawe::Position3f>(*it);
+                            auto &light = world.get<PointLight>(*it);
+
+                            vao.shader_program->setUniform(
+                                fmt::format("pointLights[{}].position", index), light_pos.component);
+                            vao.shader_program->setUniform(
+                                fmt::format("pointLights[{}].intensity", index), light.intensity);
+                            vao.shader_program->setUniform(
+                                fmt::format("pointLights[{}].DiffuseColor", index), light.diffuse_color);
+                            vao.shader_program->setUniform(
+                                fmt::format("pointLights[{}].SpecularColor", index), light.specular_color);
+                        }
+                    }
+                }
             } else {
                 const auto found = std::find_if(state->shaders.begin(), state->shaders.end(), [](auto &shader) {
                     return shader->getName() == "picking";
