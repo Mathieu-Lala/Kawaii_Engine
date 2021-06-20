@@ -41,3 +41,10 @@ auto kawe::ShaderProgram::setUniform(const std::string_view name, glm::dmat4 mat
 {
     setUniform(name, glm::mat4{mat});
 }
+
+template<>
+auto kawe::ShaderProgram::setUniform(const std::string_view name, unsigned int v) -> void
+{
+    if (const auto location = ::glGetUniformLocation(program_id, name.data()); location != -1)
+        CALL_OPEN_GL(::glUniform1ui(location, v));
+}
