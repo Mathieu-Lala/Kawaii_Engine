@@ -621,10 +621,10 @@ struct CameraData {
 struct PointLight {
     static constexpr std::string_view name{"Point Light"};
 
-    float intensity;
+    float intensity = 10.0f;
 
-    glm::dvec3 diffuse_color;
-    glm::dvec3 specular_color;
+    glm::dvec3 diffuse_color{1.0, 1.0, 1.0};
+    glm::dvec3 specular_color{1.0, 1.0, 1.0};
 
     static auto emplace(
         entt::registry &world,
