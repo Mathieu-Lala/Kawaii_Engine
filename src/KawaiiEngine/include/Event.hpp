@@ -55,9 +55,9 @@ struct Disconnected {
 /// Window Related
 
 struct Window {
-    constexpr static std::string_view name{"CloseWindow"};
+    constexpr static std::string_view name{"Window"};
     constexpr static auto elements = std::to_array<std::string_view>({"id"});
-    int id;
+    int id = 0;
 };
 
 struct ResizeWindow {
@@ -69,14 +69,16 @@ struct ResizeWindow {
 
 struct TimeElapsed {
     constexpr static std::string_view name{"TimeElapsed"};
-    constexpr static auto elements = std::to_array<std::string_view>({"elapsed", "world_time"});
+    constexpr static auto elements = std::to_array<std::string_view>({"elapsed", "world_time", "stack"});
     std::chrono::steady_clock::duration elapsed;
     std::chrono::steady_clock::duration world_time;
+    std::size_t stack;
 
     auto operator+=(const TimeElapsed &other) -> TimeElapsed &
     {
         elapsed += other.elapsed;
         world_time += other.world_time;
+        stack += other.stack;
         return *this;
     }
 };
@@ -214,8 +216,14 @@ struct Key {
     };
 
     constexpr static std::string_view name{"Key"};
-    constexpr static auto elements =
-        std::to_array<std::string_view>({"alt", "control", "system", "shift", "scancode", "keycode"});
+    constexpr static auto elements = std::to_array<std::string_view>({
+        "alt",
+        "control",
+        "system",
+        "shift",
+        "scancode",
+        "keycode",
+    });
     bool alt;
     bool control;
     bool system;
@@ -276,6 +284,8 @@ struct Joystick {
     constexpr static std::string_view name{"Joystick"};
     constexpr static auto elements = std::to_array<std::string_view>({"id", "axes", "buttons"});
 
+    using type_id = int;
+
     enum Axis {
         LSX, // left stick X
         LSY, // left stick Y
@@ -322,7 +332,7 @@ struct Joystick {
         BUTTONS_MAX,
     };
 
-    int id;
+    type_id id;
     std::array<float, AXES_MAX> axes{};
     std::array<bool, BUTTONS_MAX> buttons{};
 };
@@ -330,8 +340,7 @@ struct Joystick {
 struct JoystickAxis {
     constexpr static std::string_view name{"JoystickAxis"};
     constexpr static auto elements = std::to_array<std::string_view>({"id", "axis", "value"});
-
-    int id;
+    Joystick::type_id id;
     Joystick::Axis axis;
     float value;
 };
@@ -339,8 +348,7 @@ struct JoystickAxis {
 struct JoystickButton {
     constexpr static std::string_view name{"JoystickButton"};
     constexpr static auto elements = std::to_array<std::string_view>({"id", "button"});
-
-    int id;
+    Joystick::type_id id;
     Joystick::Buttons button;
 };
 

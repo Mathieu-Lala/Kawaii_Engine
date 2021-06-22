@@ -14,12 +14,9 @@ class EventProvider {
 public:
     EventProvider(const Window &window);
 
-    // auto assign(const Window &window) -> void;
     auto getNextEvent() -> event::Event;
     auto getLastEventWhere(const std::function<bool(const event::Event &)> &predicate) const noexcept
         -> std::optional<const event::Event *>;
-
-    auto exportEvents();
 
     auto getEventsProcessed() const noexcept -> const std::vector<event::Event> &
     {
@@ -45,8 +42,8 @@ public:
     }
 
     enum class State {
-        RECORD,   // the new event from the event callback are appended to m_buffer_events
-        PLAYBACK, // the callback are ignored
+        RECORD,
+        PLAYBACK,
     };
 
     auto getState() const noexcept { return m_state; }
@@ -59,33 +56,17 @@ public:
         // glfwSetWindowIconifyCallback(window, window_iconify_handler);
         // glfwSetWindowFocusCallback(window, window_focus_handler);
 
-        spdlog::warn("set the right callbakc {}", s);
-
         m_state = s;
 
-        switch (s) {
-        case State::RECORD: {
-            spdlog::warn("");
-            ::glfwSetWindowCloseCallback(m_window.get(), callback_eventClose);
-            ::glfwSetWindowSizeCallback(m_window.get(), callback_eventResized);
-            ::glfwSetWindowPosCallback(m_window.get(), callback_eventMoved);
-            ::glfwSetKeyCallback(m_window.get(), callback_eventKeyBoard);
-            ::glfwSetMouseButtonCallback(m_window.get(), callback_eventMousePressed);
-            ::glfwSetCursorPosCallback(m_window.get(), callback_eventMouseMoved);
-            ::glfwSetCharCallback(m_window.get(), callback_char);
-            ::glfwSetScrollCallback(m_window.get(), callback_scroll);
-        } break;
-        case State::PLAYBACK: {
-            ::glfwSetWindowCloseCallback(m_window.get(), nullptr);
-            ::glfwSetWindowSizeCallback(m_window.get(), nullptr);
-            ::glfwSetWindowPosCallback(m_window.get(), nullptr);
-            ::glfwSetKeyCallback(m_window.get(), nullptr);
-            ::glfwSetMouseButtonCallback(m_window.get(), nullptr);
-            ::glfwSetCursorPosCallback(m_window.get(), nullptr);
-            ::glfwSetCharCallback(m_window.get(), nullptr);
-            ::glfwSetScrollCallback(m_window.get(), nullptr);
-        } break;
-        }
+        const bool is_record = m_state == State::RECORD;
+        ::glfwSetWindowCloseCallback(m_window.get(), is_record ? callback_eventClose : nullptr);
+        ::glfwSetWindowSizeCallback(m_window.get(), is_record ? callback_eventResized : nullptr);
+        ::glfwSetWindowPosCallback(m_window.get(), is_record ? callback_eventMoved : nullptr);
+        ::glfwSetKeyCallback(m_window.get(), is_record ? callback_eventKeyBoard : nullptr);
+        ::glfwSetMouseButtonCallback(m_window.get(), is_record ? callback_eventMousePressed : nullptr);
+        ::glfwSetCursorPosCallback(m_window.get(), is_record ? callback_eventMouseMoved : nullptr);
+        ::glfwSetCharCallback(m_window.get(), is_record ? callback_char : nullptr);
+        ::glfwSetScrollCallback(m_window.get(), is_record ? callback_scroll : nullptr);
     }
 
 private:
@@ -104,6 +85,7 @@ private:
 
     auto fetchEvent() -> event::Event;
     auto getElapsedTime() noexcept -> std::chrono::nanoseconds;
+
     static auto callback_eventClose(::GLFWwindow *window) -> void;
     static auto callback_eventResized(GLFWwindow *, int w, int h) -> void;
     static auto callback_eventMoved(GLFWwindow *, int x, int y) -> void;

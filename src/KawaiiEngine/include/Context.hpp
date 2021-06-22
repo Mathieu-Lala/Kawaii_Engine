@@ -11,9 +11,11 @@
 
 namespace kawe {
 
-struct State {
-    State(entt::registry &world)
+struct Context {
+    Context(entt::registry &world)
     {
+        // todo : clean that
+
         const auto default_vert = world.ctx<ResourceLoader *>()->load<Shader>("./asset/shader/default.vert");
         const auto default_frag = world.ctx<ResourceLoader *>()->load<Shader>("./asset/shader/default.frag");
         shaders.emplace_back(std::make_unique<ShaderProgram>(
@@ -55,8 +57,6 @@ struct State {
         }
         for (const auto &i : magic_enum::enum_values<event::Key::Code>()) { keyboard_state[i] = false; }
     }
-
-    ~State() { spdlog::warn("warning, state destructor."); }
 
     std::vector<std::unique_ptr<ShaderProgram>> shaders;
 

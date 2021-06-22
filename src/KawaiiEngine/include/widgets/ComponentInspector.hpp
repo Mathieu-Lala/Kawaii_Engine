@@ -271,7 +271,7 @@ inline auto
 
     kawe::ShaderProgram *shader_program = vao.shader_program;
     if (ImGui::BeginCombo("##combo_vao_shader", fmt::format("shader = {}", vao.shader_program->getName()).data())) {
-        for (const auto &i : world.ctx<State *>()->shaders) {
+        for (const auto &i : world.ctx<Context *>()->shaders) {
             const auto is_selected = vao.shader_program->getName() == i->getName();
             if (ImGui::Selectable(i->getName().data(), is_selected)) {
                 shader_program = i.get();
