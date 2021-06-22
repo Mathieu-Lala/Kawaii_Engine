@@ -100,7 +100,8 @@ private:
 
 
 template<>
-inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Position3f &position) const
+inline auto
+    kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Position3f &position) const
     -> void
 {
     float temp[3] = {
@@ -117,7 +118,8 @@ inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world
 }
 
 template<>
-inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Rotation3f &rotation) const
+inline auto
+    kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Rotation3f &rotation) const
     -> void
 {
     float temp[3] = {
@@ -134,7 +136,8 @@ inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world
 }
 
 template<>
-inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Scale3f &scale) const
+inline auto
+    kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Scale3f &scale) const
     -> void
 {
     float temp[3] = {
@@ -151,7 +154,8 @@ inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world
 }
 
 template<>
-inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const FillColor &color) const
+inline auto
+    kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const FillColor &color) const
     -> void
 {
     float temp[4] = {
@@ -171,7 +175,8 @@ inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world
 }
 
 template<>
-inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Texture2D &texture) const
+inline auto
+    kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Texture2D &texture) const
     -> void
 {
     ImGuiHelper::Text("path: {}", texture.filepath.data());
@@ -195,7 +200,8 @@ inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world
 }
 
 template<>
-inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Velocity3f &vel) const
+inline auto
+    kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Velocity3f &vel) const
     -> void
 {
     float temp[3] = {
@@ -212,8 +218,8 @@ inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world
 }
 
 template<>
-inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Gravitable3f &gravity) const
-    -> void
+inline auto kawe::ComponentInspector::drawComponentTweaker(
+    entt::registry &world, entt::entity e, const Gravitable3f &gravity) const -> void
 {
     float temp[3] = {
         static_cast<float>(gravity.component.x),
@@ -229,7 +235,8 @@ inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world
 }
 
 template<>
-inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Name &name) const
+inline auto
+    kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Name &name) const
     -> void
 {
     char temp[255] = {0};
@@ -240,7 +247,8 @@ inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world
 }
 
 template<>
-inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Render::VAO &vao) const
+inline auto
+    kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Render::VAO &vao) const
     -> void
 {
     constexpr auto enum_name = magic_enum::enum_type_name<Render::VAO::DisplayMode>();
@@ -322,7 +330,8 @@ static auto stride_editor_ebo(
 }
 
 template<>
-inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Render::EBO &ebo) const
+inline auto
+    kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Render::EBO &ebo) const
     -> void
 {
     stride_editor_ebo<3>(world, e, ebo, [&](auto index, auto &stride) {
@@ -421,7 +430,8 @@ inline auto kawe::ComponentInspector::drawComponentTweaker(
 
 
 template<>
-inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Mesh &mesh) const
+inline auto
+    kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const Mesh &mesh) const
     -> void
 {
     ImGuiHelper::Text("path: {}", mesh.filepath.c_str());
@@ -451,14 +461,16 @@ inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world
 }
 
 template<>
-inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &, entt::entity, const AABB &aabb) const -> void
+inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &, entt::entity, const AABB &aabb) const
+    -> void
 {
     ImGuiHelper::Text("min: {{.x: {}, .y: {}, .z: {}}}", aabb.min.x, aabb.min.y, aabb.min.z);
     ImGuiHelper::Text("max: {{.x: {}, .y: {}, .z: {}}}", aabb.max.x, aabb.max.y, aabb.max.z);
 }
 
 template<>
-inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &, entt::entity, const Collider &collider) const
+inline auto
+    kawe::ComponentInspector::drawComponentTweaker(entt::registry &, entt::entity, const Collider &collider) const
     -> void
 {
     constexpr auto enum_name = magic_enum::enum_type_name<Collider::CollisionStep>();
@@ -466,7 +478,8 @@ inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &, ent
 }
 
 template<>
-inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity, const Parent &parent) const
+inline auto
+    kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity, const Parent &parent) const
     -> void
 {
     ImGuiHelper::Text(
@@ -475,7 +488,8 @@ inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world
 }
 
 template<>
-inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity, const Children &children) const
+inline auto
+    kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity, const Children &children) const
     -> void
 {
     if (children.component.empty()) {
@@ -488,9 +502,9 @@ inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world
     }
 }
 
-
 template<>
-inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const PointLight &light) const
+inline auto
+    kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const PointLight &light) const
     -> void
 {
     float intensity_temp = light.intensity;
@@ -529,7 +543,8 @@ inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world
 
 
 template<>
-inline auto kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const CameraData &camera) const
+inline auto
+    kawe::ComponentInspector::drawComponentTweaker(entt::registry &world, entt::entity e, const CameraData &camera) const
     -> void
 {
     static constexpr auto epsilon = 0.0001f;

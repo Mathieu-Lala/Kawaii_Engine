@@ -217,7 +217,7 @@ auto kawe::Engine::update_aabb(entt::registry &reg, entt::entity e) -> void
             AABB::emplace(reg, e, vbo->vertices);
         }
     }
-};
+}
 
 auto kawe::Engine::update_vbo_color(entt::registry &reg, entt::entity e) -> void
 {
@@ -238,7 +238,7 @@ auto kawe::Engine::update_vbo_color(entt::registry &reg, entt::entity e) -> void
     }
 
     Render::VBO<Render::VAO::Attribute::COLOR>::emplace(reg, e, vert, 4);
-};
+}
 
 // AABB algorithm = really simple and fast collision detection
 auto kawe::Engine::check_collision(entt::registry &reg, entt::entity e) -> void
@@ -272,7 +272,7 @@ auto kawe::Engine::check_collision(entt::registry &reg, entt::entity e) -> void
             reg.emplace_or_replace<FillColor>(aabb.guizmo, glm::vec4{0.0f, 0.0f, 0.0f, 1.0f});
         }
     }
-};
+}
 
 auto kawe::Engine::draw_docking_window() -> void
 {
