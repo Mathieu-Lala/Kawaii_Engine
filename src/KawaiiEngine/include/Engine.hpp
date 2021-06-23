@@ -14,7 +14,7 @@
 #include "Event.hpp"
 #include "graphics/Shader.hpp"
 #include "component.hpp"
-#include "State.hpp"
+#include "Context.hpp"
 
 #include "resources/ResourceLoader.hpp"
 
@@ -52,7 +52,7 @@ private:
     std::unique_ptr<EventMonitor> event_monitor;
     std::unique_ptr<Recorder> recorder;
 
-    std::unique_ptr<State> state;
+    std::unique_ptr<Context> ctx;
 
     auto update_aabb(entt::registry &reg, entt::entity e) -> void;
     auto update_vbo_color(entt::registry &reg, entt::entity e) -> void;

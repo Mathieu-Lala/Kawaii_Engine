@@ -1,6 +1,8 @@
 #include <vector>
 #include <chrono>
 
+#include <nlohmann/json.hpp>
+
 #include "graphics/Window.hpp"
 #include "EventProvider.hpp"
 #include "helpers/overloaded.hpp"
@@ -18,16 +20,18 @@ auto kawe::EventProvider::getNextEvent() -> event::Event
 {
     const auto event = fetchEvent();
 
+    // if (m_state == State::RECORD) {
     if (!m_events_processed.empty()) {
         // post processing to merge the event for example
         std::visit(
-            overloaded{// [](event::TimeElapsed &prev, const event::TimeElapsed &next) { prev += next; },
-                       [&](const auto &, const auto &next) { m_events_processed.push_back(next); }},
+            overloaded{
+                [](event::TimeElapsed &prev, const event::TimeElapsed &next) { prev += next; },
+                [&](const auto &, const auto &next) { m_events_processed.push_back(next); }},
             m_events_processed.back(),
             event);
-    } else {
-        m_events_processed.push_back(event);
-    }
+    } else
+        [[unlikely]] { m_events_processed.push_back(event); }
+    //}
 
     return event;
 }
@@ -54,10 +58,34 @@ auto kawe::EventProvider::fetchEvent() -> event::Event
         return event::TimeElapsed{
             std::chrono::nanoseconds{static_cast<std::int64_t>(static_cast<double>(elapsed.count()))},
             std::chrono::nanoseconds{
-                static_cast<std::int64_t>(static_cast<double>(elapsed.count()) * m_time_scaler)}};
+                static_cast<std::int64_t>(static_cast<double>(elapsed.count()) * m_time_scaler)},
+            1ul};
     } else {
-        const auto event = m_buffer_events.front();
-        m_buffer_events.erase(m_buffer_events.begin());
+        // note : for some reason, I can't call .erase in the visit
+        bool erase_last_one = true;
+        const auto event = std::visit(
+            overloaded{
+                [&](event::TimeElapsed &time) -> event::Event {
+                    if (time.stack < 2ul) {
+                        return time;
+                    } else {
+                        const auto elapsed = std::chrono::nanoseconds{static_cast<std::int64_t>(
+                            static_cast<double>(time.elapsed.count()) * (1.0 / static_cast<double>(time.stack)))};
+                        const auto world_time = std::chrono::nanoseconds{static_cast<std::int64_t>(
+                            static_cast<double>(time.world_time.count())
+                            * (1.0 / static_cast<double>(time.stack)))};
+
+                        time.elapsed -= elapsed;
+                        time.world_time -= world_time;
+                        time.stack--;
+
+                        erase_last_one = false;
+                        return event::TimeElapsed{elapsed, world_time, time.stack};
+                    }
+                },
+                [&erase_last_one](const auto &other) -> event::Event { return other; }},
+            m_buffer_events.front());
+        if (erase_last_one) { m_buffer_events.erase(m_buffer_events.begin()); }
         return event;
     }
 }

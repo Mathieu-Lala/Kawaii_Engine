@@ -16,7 +16,7 @@
 #include "helpers/Rectangle.hpp"
 
 #include "resources/ResourceLoader.hpp"
-#include "State.hpp"
+#include "Context.hpp"
 
 using namespace std::chrono_literals;
 
@@ -122,7 +122,7 @@ struct Render {
         static auto emplace(entt::registry &world, const entt::entity &entity) -> VAO &
         {
             spdlog::trace("engine::core::VAO: emplace to {}", entity);
-            VAO obj{0u, DEFAULT_MODE, 0, world.ctx<State *>()->shaders[0].get()};
+            VAO obj{0u, DEFAULT_MODE, 0, world.ctx<Context *>()->shaders[0].get()};
             CALL_OPEN_GL(::glGenVertexArrays(1, &obj.object));
             return world.emplace<VAO>(entity, obj);
         }
@@ -156,7 +156,7 @@ struct Render {
             const VAO *vao{nullptr};
             if (vao = world.try_get<VAO>(entity); !vao) { vao = &VAO::emplace(world, entity); }
             if constexpr (A == VAO::Attribute::TEXTURE_2D) {
-                const auto &shaders = world.ctx<State *>()->shaders;
+                const auto &shaders = world.ctx<Context *>()->shaders;
                 const auto found = std::find_if(begin(shaders), end(shaders), [](const auto &shader) {
                     return shader->getName() == "texture_2D";
                 });
@@ -667,6 +667,8 @@ using Component = std::variant<
     AABB,
     Clock,
     Pickable,
-    PointLight>;
+    PointLight
+
+    >;
 
 } // namespace kawe

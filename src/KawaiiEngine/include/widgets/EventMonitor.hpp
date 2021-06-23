@@ -74,8 +74,8 @@ struct EventMonitor {
         ImGui::Separator();
         ImGuiHelper::Text("Number of Event processed: {}", provider.getEventsProcessed().size());
         if (ImGui::Button("clear")) { provider.clear(); }
-        if (ImGui::Button("export")) {
-            // todo : shoudl be in a async call ?
+        if (ImGui::Button("export") && provider.getState() == EventProvider::State::RECORD) {
+            // todo : should be in a async call ?
             nlohmann::json serialized(provider.getEventsProcessed());
             std::filesystem::create_directories("logs");
             std::ofstream f{fmt::format("logs/recorded_events_{}.json", time_to_string())};
