@@ -6,8 +6,6 @@ A game engine made using the latest C++ feature, and with a modern design.
 
 ## Application
 
-See some application made with this engine:
-
 https://github.com/ltabis/cute-solar-system
 
 ## Screenshots

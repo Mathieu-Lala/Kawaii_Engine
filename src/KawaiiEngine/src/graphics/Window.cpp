@@ -27,13 +27,7 @@ kawe::Window::Window(const std::string_view window_title, glm::ivec2 &&size, glm
         spdlog::trace("Window created");
     }
 
-
-    isWindowIconofied = glfwGetWindowAttrib(window, GLFW_ICONIFIED);
-    isWindowFocused = glfwGetWindowAttrib(window, GLFW_FOCUSED);
-
     spdlog::debug("window initialized.");
-
-    // current_window_size = get_window_size();
 }
 
 auto kawe::Window::screenshot(const std::string_view filename) -> bool
@@ -67,41 +61,41 @@ auto kawe::Window::screenshot(const std::string_view filename) -> bool
 }
 
 template<>
-auto kawe::Window::useEvent(const event::Pressed<event::MouseButton> &m) -> void
+auto kawe::Window::sendEventToImGui(const event::Pressed<event::MouseButton> &m) -> void
 {
     ::ImGui_ImplGlfw_MouseButtonCallback(
         window, magic_enum::enum_integer(m.source.button), GLFW_PRESS, 0 /* todo */);
 }
 
 template<>
-auto kawe::Window::useEvent(const event::Released<event::MouseButton> &m) -> void
+auto kawe::Window::sendEventToImGui(const event::Released<event::MouseButton> &m) -> void
 {
     ::ImGui_ImplGlfw_MouseButtonCallback(
         window, magic_enum::enum_integer(m.source.button), GLFW_RELEASE, 0 /* todo */);
 }
 
 template<>
-auto kawe::Window::useEvent(const event::Pressed<event::Key> &k) -> void
+auto kawe::Window::sendEventToImGui(const event::Pressed<event::Key> &k) -> void
 {
     ::ImGui_ImplGlfw_KeyCallback(
         window, static_cast<int>(k.source.keycode), k.source.scancode, GLFW_PRESS, 0 /* todo */);
 }
 
 template<>
-auto kawe::Window::useEvent(const event::Released<event::Key> &k) -> void
+auto kawe::Window::sendEventToImGui(const event::Released<event::Key> &k) -> void
 {
     ::ImGui_ImplGlfw_KeyCallback(
         window, static_cast<int>(k.source.keycode), k.source.scancode, GLFW_RELEASE, 0 /* todo */);
 }
 
 template<>
-auto kawe::Window::useEvent(const event::Character &character) -> void
+auto kawe::Window::sendEventToImGui(const event::Character &character) -> void
 {
     ::ImGui_ImplGlfw_CharCallback(window, character.codepoint);
 }
 
 template<>
-auto kawe::Window::useEvent(const event::MouseScroll &scroll) -> void
+auto kawe::Window::sendEventToImGui(const event::MouseScroll &scroll) -> void
 {
     ::ImGui_ImplGlfw_ScrollCallback(window, scroll.x, scroll.y);
 }

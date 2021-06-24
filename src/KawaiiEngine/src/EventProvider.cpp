@@ -20,9 +20,7 @@ auto kawe::EventProvider::getNextEvent() -> event::Event
 {
     const auto event = fetchEvent();
 
-    // if (m_state == State::RECORD) {
     if (!m_events_processed.empty()) {
-        // post processing to merge the event for example
         std::visit(
             overloaded{
                 [](event::TimeElapsed &prev, const event::TimeElapsed &next) { prev += next; },
@@ -31,7 +29,6 @@ auto kawe::EventProvider::getNextEvent() -> event::Event
             event);
     } else
         [[unlikely]] { m_events_processed.push_back(event); }
-    //}
 
     return event;
 }
@@ -69,11 +66,14 @@ auto kawe::EventProvider::fetchEvent() -> event::Event
                     if (time.stack < 2ul) {
                         return time;
                     } else {
-                        const auto elapsed = std::chrono::nanoseconds{static_cast<std::int64_t>(
-                            static_cast<double>(time.elapsed.count()) * (1.0 / static_cast<double>(time.stack)))};
-                        const auto world_time = std::chrono::nanoseconds{static_cast<std::int64_t>(
-                            static_cast<double>(time.world_time.count())
-                            * (1.0 / static_cast<double>(time.stack)))};
+                        const auto get_nth = [](auto total, auto part) {
+                            return static_cast<std::int64_t>(
+                                static_cast<double>(total) * (1.0 / static_cast<double>(part)));
+                        };
+
+                        const auto elapsed = std::chrono::nanoseconds{get_nth(time.elapsed.count(), time.stack)};
+                        const auto world_time =
+                            std::chrono::nanoseconds{get_nth(time.world_time.count(), time.stack)};
 
                         time.elapsed -= elapsed;
                         time.world_time -= world_time;
@@ -98,9 +98,9 @@ auto kawe::EventProvider::getElapsedTime() noexcept -> std::chrono::nanoseconds
     return timeElapsed;
 }
 
-auto kawe::EventProvider::callback_eventClose(::GLFWwindow *window) -> void
+auto kawe::EventProvider::callback_eventClose(::GLFWwindow *) -> void
 {
-    ::glfwSetWindowShouldClose(window, false);
+    // ::glfwSetWindowShouldClose(window, false);
     s_instance->m_buffer_events.emplace_back(event::Disconnected<event::Window>{});
 }
 
@@ -137,12 +137,9 @@ auto kawe::EventProvider::callback_eventKeyBoard(GLFWwindow *, int key, int scan
     };
 }
 
-auto kawe::EventProvider::callback_eventMousePressed(
-    [[maybe_unused]] GLFWwindow *window, int button, int action, [[maybe_unused]] int mods) -> void
+auto kawe::EventProvider::callback_eventMousePressed(GLFWwindow *, int button, int action, [[maybe_unused]] int mods)
+    -> void
 {
-    // double x = 0;
-    // double y = 0;
-    // ::glfwGetCursorPos(window, &x, &y);
     switch (action) {
     case GLFW_PRESS:
         s_instance->m_buffer_events.emplace_back(
@@ -152,6 +149,7 @@ auto kawe::EventProvider::callback_eventMousePressed(
         s_instance->m_buffer_events.emplace_back(
             event::Released<event::MouseButton>{event::MouseButton::toButton(button), {}});
         break;
+        // todo :
         // default: std::abort(); break;
     };
 }
@@ -169,4 +167,19 @@ auto kawe::EventProvider::callback_char(GLFWwindow *, unsigned int codepoint) ->
 auto kawe::EventProvider::callback_scroll(GLFWwindow *, double xoffset, double yoffset) -> void
 {
     s_instance->m_buffer_events.emplace_back(event::MouseScroll{xoffset, yoffset});
+}
+
+auto kawe::EventProvider::callback_maximaze(GLFWwindow *, int value) -> void
+{
+    s_instance->m_buffer_events.emplace_back(event::MaximazeWindow{static_cast<bool>(value)});
+}
+
+auto kawe::EventProvider::callback_minimaze(GLFWwindow *, int value) -> void
+{
+    s_instance->m_buffer_events.emplace_back(event::MinimazeWindow{static_cast<bool>(value)});
+}
+
+auto kawe::EventProvider::callback_focus(GLFWwindow *, int value) -> void
+{
+    s_instance->m_buffer_events.emplace_back(event::FocusWindow{static_cast<bool>(value)});
 }

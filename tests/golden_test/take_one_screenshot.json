@@ -1,0 +1,111 @@
+[
+    {
+        "Connected": {
+            "source": {
+                "Window": {
+                    "id": 0
+                }
+            }
+        }
+    },
+    {
+        "FocusWindow": {
+            "focused": true
+        }
+    },
+    {
+        "Moved": {
+            "source": {
+                "Window": {
+                    "id": 0
+                }
+            },
+            "x": 0.0,
+            "y": 64.0
+        }
+    },
+    {
+        "TimeElapsed": {
+            "elapsed": {
+                "nanoseconds": 1850610892
+            },
+            "stack": 1559,
+            "world_time": {
+                "nanoseconds": 1850610892
+            }
+        }
+    },
+    {
+        "Pressed": {
+            "source": {
+                "Key": {
+                    "alt": false,
+                    "control": false,
+                    "keycode": "KEY_F10",
+                    "scancode": 76,
+                    "shift": false,
+                    "system": false
+                }
+            }
+        }
+    },
+    {
+        "Released": {
+            "source": {
+                "Key": {
+                    "alt": false,
+                    "control": false,
+                    "keycode": "KEY_F10",
+                    "scancode": 76,
+                    "shift": false,
+                    "system": false
+                }
+            }
+        }
+    },
+    {
+        "TimeElapsed": {
+            "elapsed": {
+                "nanoseconds": 2565026375
+            },
+            "stack": 1375,
+            "world_time": {
+                "nanoseconds": 2565026375
+            }
+        }
+    },
+    {
+        "Pressed": {
+            "source": {
+                "Key": {
+                    "alt": false,
+                    "control": false,
+                    "keycode": "KEY_LEFT_ALT",
+                    "scancode": 64,
+                    "shift": false,
+                    "system": false
+                }
+            }
+        }
+    },
+    {
+        "TimeElapsed": {
+            "elapsed": {
+                "nanoseconds": 224269946
+            },
+            "stack": 189,
+            "world_time": {
+                "nanoseconds": 224269946
+            }
+        }
+    },
+    {
+        "Disconnected": {
+            "source": {
+                "Window": {
+                    "id": 0
+                }
+            }
+        }
+    }
+]

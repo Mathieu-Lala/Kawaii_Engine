@@ -11,8 +11,6 @@ namespace kawe {
 
 namespace event {
 
-// Event Helper
-
 template<typename Source>
 struct Pressed {
     constexpr static std::string_view name{"Pressed"};
@@ -50,10 +48,6 @@ struct Disconnected {
     Source source;
 };
 
-// Event Type
-
-/// Window Related
-
 struct Window {
     constexpr static std::string_view name{"Window"};
     constexpr static auto elements = std::to_array<std::string_view>({"id"});
@@ -65,6 +59,24 @@ struct ResizeWindow {
     constexpr static auto elements = std::to_array<std::string_view>({"width", "height"});
     int width;
     int height;
+};
+
+struct MaximazeWindow {
+    constexpr static std::string_view name{"MaximazeWindow"};
+    constexpr static auto elements = std::to_array<std::string_view>({"maximazed"});
+    bool maximazed;
+};
+
+struct MinimazeWindow {
+    constexpr static std::string_view name{"MinimazeWindow"};
+    constexpr static auto elements = std::to_array<std::string_view>({"minimazed"});
+    bool minimazed;
+};
+
+struct FocusWindow {
+    constexpr static std::string_view name{"FocusWindow"};
+    constexpr static auto elements = std::to_array<std::string_view>({"focused"});
+    bool focused;
 };
 
 struct TimeElapsed {
@@ -361,6 +373,9 @@ using Event = std::variant<
     Disconnected<Window>,
     Moved<Window>,
     ResizeWindow,
+    MaximazeWindow,
+    MinimazeWindow,
+    FocusWindow,
 
     TimeElapsed,
 

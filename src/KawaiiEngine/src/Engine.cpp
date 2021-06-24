@@ -143,7 +143,7 @@ auto kawe::Engine::start() -> void
 
     on_create(world);
 
-    while (ctx->is_running && !window->should_close()) {
+    while (ctx->is_running) {
         const auto event = events->getNextEvent();
 
         if (events->getState() == EventProvider::State::PLAYBACK) {
@@ -159,6 +159,9 @@ auto kawe::Engine::start() -> void
                     [&](const event::ResizeWindow &e) {
                         window->setSize({e.width, e.height});
                     },
+                    [&](const event::MaximazeWindow &e) { window->maximaze(e.maximazed); },
+                    [&](const event::MinimazeWindow &e) { window->minimaze(e.minimazed); },
+                    [&](const event::FocusWindow &e) { window->focus(e.focused); },
                     [](const auto &) {}},
                 event);
         }
@@ -174,37 +177,49 @@ auto kawe::Engine::start() -> void
                     dispatcher.trigger<event::Moved<event::Mouse>>(mouse);
                 },
                 [&](const event::Pressed<event::MouseButton> &e) {
-                    window->useEvent(e);
+                    window->sendEventToImGui(e);
                     ctx->state_mouse_button[e.source.button] = true;
                     ctx->mouse_pos_when_pressed = ctx->mouse_pos;
                     dispatcher.trigger<event::Pressed<event::MouseButton>>(e);
                 },
                 [&](const event::Released<event::MouseButton> &e) {
-                    window->useEvent(e);
+                    window->sendEventToImGui(e);
                     ctx->state_mouse_button[e.source.button] = false;
                     dispatcher.trigger<event::Released<event::MouseButton>>(e);
                 },
                 [&](const event::Pressed<event::Key> &e) {
-                    window->useEvent(e);
+                    window->sendEventToImGui(e);
                     ctx->keyboard_state[e.source.keycode] = true;
+                    // todo : should be a signal instead
+                    if (e.source.keycode == event::Key::Code::KEY_F10) {
+                        std::filesystem::create_directories("screenshot");
+                        window->screenshot(fmt::format("screenshot/screenshot_{}.png", time_to_string()));
+                    }
                     dispatcher.trigger<event::Pressed<event::Key>>(e);
                 },
                 [&](const event::Released<event::Key> &e) {
-                    window->useEvent(e);
+                    window->sendEventToImGui(e);
                     ctx->keyboard_state[e.source.keycode] = false;
                     dispatcher.trigger<event::Released<event::Key>>(e);
                 },
                 [&](const event::Character &e) {
-                    window->useEvent(e);
+                    window->sendEventToImGui(e);
                     dispatcher.trigger<event::Character>(e);
                 },
                 [&](const event::MouseScroll &e) {
-                    window->useEvent(e);
+                    window->sendEventToImGui(e);
                     dispatcher.trigger<event::MouseScroll>(e);
                 },
                 [&](const event::TimeElapsed &e) { on_time_elapsed(e); },
                 [](const auto &) {}},
             event);
+    }
+
+    if (event_monitor->export_on_close) {
+        nlohmann::json serialized(events->getEventsProcessed());
+        std::filesystem::create_directories("logs");
+        std::ofstream f{fmt::format("logs/recorded_events_{}.json", time_to_string())};
+        f << serialized;
     }
 
     world.clear();
@@ -316,14 +331,6 @@ auto kawe::Engine::on_time_elapsed(const event::TimeElapsed &e) -> void
 
     // updating clocks.
     world.view<Clock>().each([&e](Clock &clock) { clock.on_update(e); });
-
-    // // note : is it the best way of doing that ?
-    // for (const auto &entity : world.view<Velocity3f, CameraData>()) {
-    //     const auto &vel = world.get<Velocity3f>(entity);
-    //     world.patch<CameraData>(entity, [&vel, &dt_secs](auto &cam) {
-    //         cam.target_center += vel.component * static_cast<double>(dt_secs);
-    //     });
-    // }
 
     for (const auto &entity : world.view<Gravitable3f, Velocity3f>()) {
         const auto &gravity = world.get<Gravitable3f>(entity);
