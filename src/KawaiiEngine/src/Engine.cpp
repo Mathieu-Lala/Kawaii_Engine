@@ -356,6 +356,7 @@ auto kawe::Engine::on_time_elapsed(const event::TimeElapsed &e) -> void
             component_inspector.draw<Component>(world);
             event_monitor->draw();
             recorder->draw();
+            console.draw();
         }
     }
 

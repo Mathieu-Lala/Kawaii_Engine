@@ -22,6 +22,7 @@
 #include "widgets/EntityHierarchy.hpp"
 #include "widgets/EventMonitor.hpp"
 #include "widgets/Recorder.hpp"
+#include "widgets/Console.hpp"
 
 
 using namespace std::chrono_literals;
@@ -51,6 +52,7 @@ private:
     EntityHierarchy entity_hierarchy;
     std::unique_ptr<EventMonitor> event_monitor;
     std::unique_ptr<Recorder> recorder;
+    Console console;
 
     std::unique_ptr<Context> ctx;
 
