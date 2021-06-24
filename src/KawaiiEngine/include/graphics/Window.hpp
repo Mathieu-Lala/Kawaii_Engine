@@ -17,17 +17,8 @@ public:
 
     auto get() const noexcept -> GLFWwindow * { return window; }
 
-    auto should_close() -> bool { return m_should_close; }
-
-    void close()
-    {
-        m_should_close = true;
-        glfwSetWindowShouldClose(window, true);
-    }
-
-    // note : send the event to imgui
     template<typename T>
-    auto useEvent(const T &) -> void;
+    auto sendEventToImGui(const T &) -> void;
 
     template<typename T = double>
     [[nodiscard]] auto getSize() const noexcept -> glm::vec<2, T>
@@ -51,14 +42,18 @@ public:
 
     auto setSize(glm::ivec2 &&size) -> void { ::glfwSetWindowSize(window, size.x, size.y); }
 
+    auto maximaze(bool value) -> void { value ? ::glfwMaximizeWindow(window) : ::glfwRestoreWindow(window); }
+    auto minimaze(bool value) -> void { value ? ::glfwIconifyWindow(window) : ::glfwRestoreWindow(window); }
+
+    auto focus(bool value) -> void
+    {
+        if (value) ::glfwFocusWindow(window);
+    }
+
     auto screenshot(const std::string_view filename) -> bool;
 
 private:
     GLFWwindow *window;
-
-    bool isWindowIconofied;
-    bool isWindowFocused;
-    bool m_should_close = false;
 };
 
 } // namespace kawe

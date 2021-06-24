@@ -81,6 +81,8 @@ struct EventMonitor {
             std::ofstream f{fmt::format("logs/recorded_events_{}.json", time_to_string())};
             f << serialized;
         }
+        ImGui::SameLine();
+        ImGui::Checkbox("export on close", &export_on_close);
         ImGui::Separator();
         {
             const auto last_not_time_elapsed = provider.getLastEventWhere(
@@ -95,6 +97,8 @@ struct EventMonitor {
 
         ImGui::End();
     }
+
+    bool export_on_close = true;
 
 private:
     std::list<event::TimeElapsed> times;
