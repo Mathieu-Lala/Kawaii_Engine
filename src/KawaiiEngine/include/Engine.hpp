@@ -41,6 +41,8 @@ public:
     auto start() -> void;
 
 private:
+    Console console;
+
     std::unique_ptr<EventProvider> events;
     std::unique_ptr<Window> window;
 
@@ -52,7 +54,6 @@ private:
     EntityHierarchy entity_hierarchy;
     std::unique_ptr<EventMonitor> event_monitor;
     std::unique_ptr<Recorder> recorder;
-    Console console;
 
     std::unique_ptr<Context> ctx;
 
