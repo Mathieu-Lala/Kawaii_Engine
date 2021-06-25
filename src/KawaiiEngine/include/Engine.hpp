@@ -22,6 +22,7 @@
 #include "widgets/EntityHierarchy.hpp"
 #include "widgets/EventMonitor.hpp"
 #include "widgets/Recorder.hpp"
+#include "widgets/Console.hpp"
 
 
 using namespace std::chrono_literals;
@@ -40,6 +41,8 @@ public:
     auto start() -> void;
 
 private:
+    Console console;
+
     std::unique_ptr<EventProvider> events;
     std::unique_ptr<Window> window;
 

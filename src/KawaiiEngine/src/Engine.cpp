@@ -4,17 +4,17 @@ using namespace std::chrono_literals;
 
 kawe::Engine::Engine() : entity_hierarchy{component_inspector.selected}
 {
-    spdlog::set_level(spdlog::level::trace);
-
     constexpr auto KAWE_GLFW_MAJOR = 4;
     constexpr auto KAWE_GLFW_MINOR = 5;
 
     glfwSetErrorCallback([](int code, const char *message) {
-        spdlog::error("[GLFW] An error occurred '{}' 'code={}'\n", message, code);
+        spdlog::get("console")->error("[GLFW] An error occurred '{}' 'code={}'", message, code);
     });
 
-
-    if (glfwInit() == GLFW_FALSE) { return; }
+    if (glfwInit() == GLFW_FALSE) {
+        spdlog::get("console")->critical("[GLFW] Initialisation failed");
+        return;
+    }
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, KAWE_GLFW_MAJOR);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, KAWE_GLFW_MINOR);
@@ -23,30 +23,38 @@ kawe::Engine::Engine() : entity_hierarchy{component_inspector.selected}
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
 
-    spdlog::trace("[GLFW] Version: '{}'\n", glfwGetVersionString());
+    spdlog::get("console")->debug("[GLFW] version: '{}'", glfwGetVersionString());
+
+    // todo : only in debug mode
+    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 
     // todo : allow app to change that
     window = std::make_unique<Window>("Kawe: Engine", glm::ivec2{1600, 900});
     glfwMakeContextCurrent(window->get());
 
     if (const auto err = glewInit(); err != GLEW_OK) {
-        spdlog::error("[GLEW] An error occurred '{}' 'code={}'", glewGetErrorString(err), err);
+        spdlog::get("console")->critical("[GLEW] An error occurred '{}' 'code={}'", glewGetErrorString(err), err);
         return;
     }
 
-    spdlog::info("OpenGL version supported by this platform ({})", glGetString(GL_VERSION));
+    spdlog::get("console")->debug(
+        "[Engine] OpenGL version supported by this platform ({})", glGetString(GL_VERSION));
 
+    // todo : only in debug mode
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(
         []([[maybe_unused]] GLenum source,
-           [[maybe_unused]] GLenum type,
+           GLenum type,
            [[maybe_unused]] GLuint id,
            [[maybe_unused]] GLenum severity,
            [[maybe_unused]] GLsizei length,
            const GLchar *message,
-           [[maybe_unused]] const void *userParam) {
-            spdlog::error(
-                "GL CALLBACK: {} message = {}", (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""), message);
+           const void *) {
+            if (type == GL_DEBUG_TYPE_ERROR) {
+                spdlog::get("console")->error("[Engine] GL CALLBACK: message = {}", message);
+            } else {
+                spdlog::get("console")->warn("[Engine] GL CALLBACK: message = {}", message);
+            }
         },
         nullptr);
 
@@ -56,7 +64,6 @@ kawe::Engine::Engine() : entity_hierarchy{component_inspector.selected}
     if (!imgui_ctx) { return; }
 
     if (!::ImGui_ImplGlfw_InitForOpenGL(window->get(), false)) { return; }
-
     if (!::ImGui_ImplOpenGL3_Init()) { return; }
 
     glfwSwapInterval(0);
@@ -356,6 +363,7 @@ auto kawe::Engine::on_time_elapsed(const event::TimeElapsed &e) -> void
             component_inspector.draw<Component>(world);
             event_monitor->draw();
             recorder->draw();
+            console.draw();
         }
     }
 
