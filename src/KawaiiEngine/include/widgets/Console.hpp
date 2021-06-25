@@ -5,131 +5,90 @@
 namespace kawe {
 
 struct Console {
-    std::vector<std::string> Items;
-    std::vector<std::string> Commands;
-    std::vector<std::string> History;
-
-    int HistoryPos = -1; // -1: new line, 0..History.Size-1 browsing history.
-    ImGuiTextFilter Filter;
-
-    bool AutoScroll = true;
-    bool ScrollToBottom = false;
-
     Console()
     {
-        Commands.push_back("HELP");
-        Commands.push_back("HISTORY");
-        Commands.push_back("CLEAR");
-        Commands.push_back("CLASSIFY");
-        AddLog("Welcome to Dear ImGui!");
+        commands.push_back("HELP");
+        commands.push_back("HISTORY");
+        commands.push_back("CLEAR");
+        commands.push_back("CLASSIFY");
+        log("Welcome to Kawe Debug Console!");
     }
 
-    static int Strnicmp(const char *s1, const char *s2, int n)
+    auto clear() -> void { messages.clear(); }
+
+    template<typename... Args>
+    auto log(const std::string_view fmt, Args &&... args) -> void
     {
-        int d = 0;
-        while (n > 0 && (d = toupper(*s2) - toupper(*s1)) == 0 && *s1) {
-            s1++;
-            s2++;
-            n--;
-        }
-        return d;
-    }
-    static char *Strdup(const char *s)
-    {
-        IM_ASSERT(s);
-        size_t len = strlen(s) + 1;
-        void *buf = malloc(len);
-        IM_ASSERT(buf);
-        return (char *) memcpy(buf, (const void *) s, len);
+        messages.push_back(fmt::format(fmt, args...));
     }
 
-
-    void ClearLog() { Items.clear(); }
-
-    void AddLog(const char *fmt, ...) IM_FMTARGS(2)
+    auto draw() -> void
     {
-        // FIXME-OPT
-        char buf[1024];
-        va_list args;
-        va_start(args, fmt);
-        vsnprintf(buf, IM_ARRAYSIZE(buf), fmt, args);
-        buf[IM_ARRAYSIZE(buf) - 1] = 0;
-        va_end(args);
-        Items.push_back(Strdup(buf));
-    }
-
-    void draw()
-    {
-        // ImGui::SetNextWindowSize(ImVec2(520, 600), ImGuiCond_FirstUseEver);
         if (!ImGui::Begin("KAWE: Console")) { return ImGui::End(); }
 
-        // if (ImGui::BeginPopupContextItem()) {
-        //     if (ImGui::MenuItem("Close Console")) *p_open = false;
-        //     ImGui::EndPopup();
-        // }
-
-        ImGui::TextWrapped(
-            "This example implements a console with basic coloring, completion (TAB key) and history (Up/Down keys). A more elaborate "
-            "implementation may want to store entries along with extra data such as timestamp, emitter, etc.");
+        ImGui::TextWrapped("Completion (TAB key) and history (Up/Down keys).");
         ImGui::TextWrapped("Enter 'HELP' for help.");
 
+        draw_select_log_level();
+
         if (ImGui::SmallButton("Add Debug Text")) {
-            AddLog("%d some text", Items.size());
-            AddLog("some more text");
-            AddLog("display very important message here!");
+            log("{} some text", messages.size());
+            log("some more text");
+            log("display very important message here!");
         }
         ImGui::SameLine();
-        if (ImGui::SmallButton("Add Debug Error")) { AddLog("[error] something went wrong"); }
+        if (ImGui::SmallButton("Add Debug Error")) { log("[error] something went wrong"); }
         ImGui::SameLine();
-        if (ImGui::SmallButton("Clear")) { ClearLog(); }
+        if (ImGui::SmallButton("Clear")) { clear(); }
         ImGui::SameLine();
         bool copy_to_clipboard = ImGui::SmallButton("Copy");
 
         ImGui::Separator();
 
         if (ImGui::BeginPopup("Options")) {
-            ImGui::Checkbox("Auto-scroll", &AutoScroll);
+            ImGui::Checkbox("Auto-scroll", &autoscroll);
             ImGui::EndPopup();
         }
 
         if (ImGui::Button("Options")) ImGui::OpenPopup("Options");
         ImGui::SameLine();
-        Filter.Draw("Filter (\"incl,-excl\") (\"error\")", 180);
+        filter.Draw("Filter (\"incl,-excl\") (\"error\")", 180);
         ImGui::Separator();
 
-        const float footer_height_to_reserve =
+        const auto footer_height_to_reserve =
             ImGui::GetStyle().ItemSpacing.y + ImGui::GetFrameHeightWithSpacing();
         ImGui::BeginChild(
             "ScrollingRegion", ImVec2(0, -footer_height_to_reserve), false, ImGuiWindowFlags_HorizontalScrollbar);
         if (ImGui::BeginPopupContextWindow()) {
-            if (ImGui::Selectable("Clear")) ClearLog();
+            if (ImGui::Selectable("Clear")) clear();
             ImGui::EndPopup();
         }
 
+        const auto get_color = [](auto &str) -> std::optional<ImVec4> {
+            if (str.find("[error]") != std::string::npos) {
+                return ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
+            } else if (str.substr(0, 2) == "# ") {
+                return ImVec4(1.0f, 0.8f, 0.6f, 1.0f);
+            } else {
+                return {};
+            }
+        };
+
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 1));
         if (copy_to_clipboard) ImGui::LogToClipboard();
-        for (std::size_t i = 0; i < Items.size(); i++) {
-            const auto item = Items[i];
-            if (!Filter.PassFilter(item.data())) continue;
+        for (const auto &i : messages) {
+            if (!filter.PassFilter(i.data())) continue;
 
-            ImVec4 color;
-            bool has_color = false;
-            if (item.find("[error]") != std::string::npos) {
-                color = ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
-                has_color = true;
-            } else if (item.substr(0, 2) == "# ") {
-                color = ImVec4(1.0f, 0.8f, 0.6f, 1.0f);
-                has_color = true;
-            }
-            if (has_color) ImGui::PushStyleColor(ImGuiCol_Text, color);
-            ImGui::TextUnformatted(item.data());
-            if (has_color) ImGui::PopStyleColor();
+            const auto color = get_color(i);
+            if (color.has_value()) ImGui::PushStyleColor(ImGuiCol_Text, color.value());
+            ImGui::TextUnformatted(i.data());
+            if (color.has_value()) ImGui::PopStyleColor();
         }
         if (copy_to_clipboard) ImGui::LogFinish();
 
-        if (ScrollToBottom || (AutoScroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY()))
+        if (scroll_to_bottom || (autoscroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY()))
             ImGui::SetScrollHereY(1.0f);
-        ScrollToBottom = false;
+        scroll_to_bottom = false;
 
         ImGui::PopStyleVar();
         ImGui::EndChild();
@@ -137,6 +96,7 @@ struct Console {
 
         bool reclaim_focus = false;
         std::array<char, 256> InputBuf;
+        std::fill(InputBuf.begin(), InputBuf.end(), 0);
         if (ImGui::InputText(
                 "Input",
                 InputBuf.data(),
@@ -158,101 +118,134 @@ struct Console {
         ImGui::End();
     }
 
-    void ExecCommand(const std::string command_line)
+    auto ExecCommand(const std::string command_line) -> void
     {
-        AddLog("# %s\n", command_line.data());
+        log("# {}\n", command_line.data());
 
-        HistoryPos = -1;
-        for (int i = History.size() - 1; i >= 0; i--)
-            if (History[i] == command_line) {
-                History.erase(History.begin() + i);
-                break;
-            }
-        History.push_back(command_line);
+        history_position = -1;
+        std::erase(history_message, command_line);
+        history_message.push_back(command_line);
 
         if (command_line == "CLEAR") {
-            ClearLog();
+            clear();
         } else if (command_line == "HELP") {
-            AddLog("Commands:");
-            for (int i = 0; i < Commands.size(); i++) AddLog("- %s", Commands[i]);
+            log("Commands:");
+            for (const auto &i : commands) log("- {}", i);
         } else if (command_line == "HISTORY") {
-            int first = History.size() - 10;
-            for (int i = first > 0 ? first : 0; i < History.size(); i++) AddLog("%3d: %s\n", i, History[i]);
+            for (auto i = static_cast<std::size_t>(
+                     std::max(static_cast<std::int32_t>(history_message.size()) - 10, 0));
+                 i < history_message.size();
+                 i++) {
+                log("{}: {}\n", i, history_message[i]);
+            }
         } else {
-            AddLog("Unknown command: '%s'\n", command_line);
+            log("Unknown command: '{}'\n", command_line);
         }
 
-        ScrollToBottom = true;
+        scroll_to_bottom = true;
     }
 
-    int TextEditCallback(ImGuiInputTextCallbackData *data)
+private:
+    std::vector<std::string> messages;
+    std::vector<std::string> commands;
+    std::vector<std::string> history_message;
+
+    int history_position = -1; // -1: new line, 0..History.Size-1 browsing history.
+    ImGuiTextFilter filter;
+
+    bool autoscroll = true;
+    bool scroll_to_bottom = false;
+
+    auto TextEditCallback(ImGuiInputTextCallbackData *data) -> int
     {
         switch (data->EventFlag) {
         case ImGuiInputTextFlags_CallbackCompletion: {
-            const char *word_end = data->Buf + data->CursorPos;
-            const char *word_start = word_end;
+            const auto word_end = data->Buf + data->CursorPos;
+            auto word_start = word_end;
             while (word_start > data->Buf) {
-                const char c = word_start[-1];
+                const auto c = word_start[-1];
                 if (c == ' ' || c == '\t' || c == ',' || c == ';') break;
                 word_start--;
             }
 
-            ImVector<const char *> candidates;
-            for (int i = 0; i < Commands.size(); i++)
-                if (Strnicmp(Commands[i].data(), word_start, (int) (word_end - word_start)) == 0)
-                    candidates.push_back(Commands[i].data());
+            std::vector<std::string> candidates;
+            for (const auto &i : commands)
+                if (i.find(word_start) != std::string::npos) { candidates.push_back(i); }
 
-            if (candidates.size() == 0) {
-                AddLog("No match for \"%.*s\"!\n", (int) (word_end - word_start), word_start);
+            if (candidates.empty()) {
+                log("No match for \"{.*s}\"!\n", static_cast<int>(word_end - word_start), word_start);
             } else if (candidates.size() == 1) {
-                data->DeleteChars((int) (word_start - data->Buf), (int) (word_end - word_start));
-                data->InsertChars(data->CursorPos, candidates[0]);
-                data->InsertChars(data->CursorPos, " ");
+                data->DeleteChars(
+                    static_cast<int>(word_start - data->Buf), static_cast<int>(word_end - word_start));
+                data->InsertChars(data->CursorPos, candidates[0].data());
             } else {
-                int match_len = (int) (word_end - word_start);
+                auto match_len = static_cast<std::size_t>(word_end - word_start);
                 for (;;) {
                     int c = 0;
                     bool all_candidates_matches = true;
-                    for (int i = 0; i < candidates.Size && all_candidates_matches; i++)
-                        if (i == 0)
-                            c = toupper(candidates[i][match_len]);
-                        else if (c == 0 || c != toupper(candidates[i][match_len]))
+                    for (auto i = 0ul; i < candidates.size() && all_candidates_matches; i++)
+                        if (i == 0ul)
+                            c = std::toupper(candidates[i][match_len]);
+                        else if (c == 0 || c != std::toupper(candidates[i][match_len]))
                             all_candidates_matches = false;
                     if (!all_candidates_matches) break;
                     match_len++;
                 }
 
                 if (match_len > 0) {
-                    data->DeleteChars((int) (word_start - data->Buf), (int) (word_end - word_start));
-                    data->InsertChars(data->CursorPos, candidates[0], candidates[0] + match_len);
+                    data->DeleteChars(
+                        static_cast<int>(word_start - data->Buf), static_cast<int>(word_end - word_start));
+                    data->InsertChars(data->CursorPos, candidates[0].data(), candidates[0].data() + match_len);
                 }
 
-                AddLog("Possible matches:\n");
-                for (int i = 0; i < candidates.Size; i++) AddLog("- %s\n", candidates[i]);
+                log("Possible matches:\n");
+                for (const auto &i : candidates) { log("- {}\n", i); }
             }
-
-            break;
-        }
+        } break;
         case ImGuiInputTextFlags_CallbackHistory: {
-            const int prev_history_pos = HistoryPos;
+            const int prev_history_pos = history_position;
             if (data->EventKey == ImGuiKey_UpArrow) {
-                if (HistoryPos == -1)
-                    HistoryPos = History.size() - 1;
-                else if (HistoryPos > 0)
-                    HistoryPos--;
+                if (history_position == -1) {
+                    history_position = static_cast<int>(history_message.size() - 1ul);
+                } else if (history_position > 0) {
+                    history_position--;
+                }
             } else if (data->EventKey == ImGuiKey_DownArrow) {
-                if (HistoryPos != -1)
-                    if (++HistoryPos >= History.size()) HistoryPos = -1;
+                if (history_position != -1) {
+                    history_position = (history_position + 2) % static_cast<int>(history_message.size() + 1) - 1;
+                }
             }
 
-            if (prev_history_pos != HistoryPos) {
-                const auto history_str = (HistoryPos >= 0) ? History[HistoryPos] : "";
+            if (prev_history_pos != history_position) {
                 data->DeleteChars(0, data->BufTextLen);
-                data->InsertChars(0, history_str.data());
+                data->InsertChars(
+                    0,
+                    ((history_position >= 0) ? history_message[static_cast<std::size_t>(history_position)] : "")
+                        .data());
             }
-        }
+        } break;
         }
         return 0;
+    }
+
+    auto draw_select_log_level() -> void
+    {
+        constexpr auto enum_name = magic_enum::enum_type_name<spdlog::level::level_enum>();
+        auto log_level = spdlog::get_level();
+        if (ImGui::BeginCombo(
+                "##combo_vao_mode",
+                fmt::format("{} = {}", enum_name.data(), magic_enum::enum_name(log_level)).data())) {
+            for (const auto &[value, name] : magic_enum::enum_entries<spdlog::level::level_enum>()) {
+                if (value == spdlog::level::n_levels) continue;
+                const auto is_selected = log_level == value;
+                if (ImGui::Selectable(name.data(), is_selected)) {
+                    log_level = value;
+                    spdlog::set_level(log_level);
+                }
+                if (is_selected) { ImGui::SetItemDefaultFocus(); }
+            }
+            ImGui::EndCombo();
+        }
     }
 };
 
