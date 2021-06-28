@@ -24,6 +24,7 @@
 #include "widgets/Recorder.hpp"
 #include "widgets/Console.hpp"
 
+#include "System.hpp"
 
 using namespace std::chrono_literals;
 
@@ -34,47 +35,31 @@ public:
     Engine();
     ~Engine();
 
-    std::function<void()> on_imgui;
-    std::function<void(entt::registry &)> on_create;
     bool render_internal_gui = true;
 
-    auto start() -> void;
+    auto start(const std::function<void(entt::registry &)> on_create) -> void;
 
 private:
+    // widgets
     Console console;
-
-    std::unique_ptr<EventProvider> events;
-    std::unique_ptr<Window> window;
-
-    ResourceLoader loader;
-    entt::dispatcher dispatcher;
-    entt::registry world;
-
     ComponentInspector component_inspector;
     EntityHierarchy entity_hierarchy;
     std::unique_ptr<EventMonitor> event_monitor;
     std::unique_ptr<Recorder> recorder;
 
+    std::unique_ptr<EventProvider> events;
+
+    // todo : should be an entity
+    std::unique_ptr<Window> window;
+
+    ResourceLoader loader;
+
+    entt::dispatcher dispatcher;
+    entt::registry world;
     std::unique_ptr<Context> ctx;
+    std::unique_ptr<System> system;
 
-    auto update_aabb(entt::registry &reg, entt::entity e) -> void;
-    auto update_vbo_color(entt::registry &reg, entt::entity e) -> void;
-
-    // AABB algorithm = really simple and fast collision detection
-    auto check_collision(entt::registry &reg, entt::entity e) -> void;
-
-    static auto draw_docking_window() -> void;
-
-    auto on_time_elapsed(const event::TimeElapsed &e) -> void;
-
-    auto update_camera(entt::registry &reg, entt::entity e) -> void;
-    auto create_camera(entt::registry &reg, entt::entity e) -> void;
-
-    auto try_update_camera_target(entt::registry &reg, entt::entity e) -> void;
-
-    auto update_camera_event(const event::TimeElapsed &e) -> void;
-
-    auto system_rendering() -> void;
+    auto on_imgui(const kawe::action::Render<kawe::Render::Layout::UI>) -> void;
 };
 
 } // namespace kawe

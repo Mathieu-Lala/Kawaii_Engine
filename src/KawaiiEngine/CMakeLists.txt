@@ -1,7 +1,7 @@
 add_library(
   kawaii_engine STATIC
   src/graphics/Window.cpp src/graphics/Shader.cpp src/EventProvider.cpp src/widgets/ComponentInspector.cpp
-  src/resources/ResourceLoader.cpp src/Component.cpp src/deps/deps_impl.cpp src/Engine.cpp)
+  src/resources/ResourceLoader.cpp src/Component.cpp src/deps/deps_impl.cpp src/Engine.cpp src/System.cpp)
 
 target_link_libraries(
   kawaii_engine
