@@ -33,12 +33,10 @@ struct Children {
 
     std::vector<entt::entity> component;
 
-    static auto emplace(entt::registry &world, entt::entity e, const std::vector<entt::entity> &children)
-        -> Children &
+    static auto emplace(entt::registry &world, entt::entity e, const std::vector<entt::entity> &children) -> Children &
     {
-        std::for_each(children.begin(), children.end(), [&world, &e](const auto &child) {
-            world.emplace<Parent>(child, e);
-        });
+        std::for_each(
+            children.begin(), children.end(), [&world, &e](const auto &child) { world.emplace<Parent>(child, e); });
 
         return world.emplace<Children>(e, children);
     }
@@ -80,6 +78,11 @@ using Scale3f = Scale<3, double>;
 
 // using this because the VAO/VBO/EBO are referencing each others
 struct Render {
+    enum class Layout {
+        SCENE,
+        UI,
+    };
+
     struct VAO {
         static constexpr std::string_view name{"VAO"};
 
@@ -145,11 +148,9 @@ struct Render {
         std::vector<float> vertices;
         std::size_t stride_size;
 
-        static auto emplace(
-            entt::registry &world,
-            const entt::entity &entity,
-            const std::vector<float> &in_vertices,
-            std::size_t in_stride_size) -> VBO<A> &
+        static auto
+            emplace(entt::registry &world, const entt::entity &entity, const std::vector<float> &in_vertices, std::size_t in_stride_size)
+                -> VBO<A> &
         {
             spdlog::trace("engine::core::VBO<{}>: emplace to {}", magic_enum::enum_name(A).data(), entity);
 
@@ -157,9 +158,8 @@ struct Render {
             if (vao = world.try_get<VAO>(entity); !vao) { vao = &VAO::emplace(world, entity); }
             if constexpr (A == VAO::Attribute::TEXTURE_2D) {
                 const auto &shaders = world.ctx<Context *>()->shaders;
-                const auto found = std::find_if(begin(shaders), end(shaders), [](const auto &shader) {
-                    return shader->getName() == "texture_2D";
-                });
+                const auto found = std::find_if(
+                    begin(shaders), end(shaders), [](const auto &shader) { return shader->getName() == "texture_2D"; });
                 world.patch<VAO>(
                     entity, [shader = found == std::end(shaders) ? shaders[0].get() : (*found).get()](auto &obj) {
                         obj.shader_program = shader;
@@ -173,10 +173,7 @@ struct Render {
 
             CALL_OPEN_GL(::glBindBuffer(GL_ARRAY_BUFFER, obj.object));
             CALL_OPEN_GL(::glBufferData(
-                GL_ARRAY_BUFFER,
-                static_cast<GLsizeiptr>(obj.vertices.size() * sizeof(float)),
-                obj.vertices.data(),
-                GL_STATIC_DRAW));
+                GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(obj.vertices.size() * sizeof(float)), obj.vertices.data(), GL_STATIC_DRAW));
             CALL_OPEN_GL(::glVertexAttribPointer(
                 static_cast<GLuint>(A),
                 static_cast<GLint>(obj.stride_size),
@@ -187,9 +184,8 @@ struct Render {
             CALL_OPEN_GL(::glEnableVertexAttribArray(static_cast<GLuint>(A)));
 
             if (const auto ebo = world.try_get<EBO>(entity); ebo == nullptr) {
-                world.patch<VAO>(entity, [&obj](VAO &vao_obj) {
-                    vao_obj.count = static_cast<GLsizei>(obj.vertices.size());
-                });
+                world.patch<VAO>(
+                    entity, [&obj](VAO &vao_obj) { vao_obj.count = static_cast<GLsizei>(obj.vertices.size()); });
             }
 
             world.remove_if_exists<VBO<A>>(entity);
@@ -197,14 +193,11 @@ struct Render {
         }
 
         template<std::size_t S>
-        static auto emplace(
-            entt::registry &world,
-            const entt::entity &entity,
-            const std::array<float, S> &in_vertices,
-            std::size_t in_stride_size) -> VBO<A> &
+        static auto
+            emplace(entt::registry &world, const entt::entity &entity, const std::array<float, S> &in_vertices, std::size_t in_stride_size)
+                -> VBO<A> &
         {
-            return emplace(
-                world, entity, std::vector<float>(in_vertices.begin(), in_vertices.end()), in_stride_size);
+            return emplace(world, entity, std::vector<float>(in_vertices.begin(), in_vertices.end()), in_stride_size);
         }
 
         static auto on_destroy(entt::registry &world, const entt::entity &entity) -> void
@@ -222,16 +215,14 @@ struct Render {
         std::vector<std::uint32_t> indices;
 
         template<std::size_t S>
-        static auto
-            emplace(entt::registry &world, const entt::entity &entity, const std::array<std::uint32_t, S> &indices)
-                -> EBO &
+        static auto emplace(entt::registry &world, const entt::entity &entity, const std::array<std::uint32_t, S> &indices)
+            -> EBO &
         {
             return emplace(world, entity, std::vector<std::uint32_t>(indices.begin(), indices.end()));
         }
 
-        static auto
-            emplace(entt::registry &world, const entt::entity &entity, const std::vector<std::uint32_t> &indices)
-                -> EBO &
+        static auto emplace(entt::registry &world, const entt::entity &entity, const std::vector<std::uint32_t> &indices)
+            -> EBO &
         {
             spdlog::trace("engine::core::EBO: emplace of {}", entity);
 
@@ -249,8 +240,7 @@ struct Render {
                 obj.indices.data(),
                 GL_STATIC_DRAW));
 
-            world.patch<VAO>(
-                entity, [&obj](VAO &vao_obj) { vao_obj.count = static_cast<GLsizei>(obj.indices.size()); });
+            world.patch<VAO>(entity, [&obj](VAO &vao_obj) { vao_obj.count = static_cast<GLsizei>(obj.indices.size()); });
 
             return world.emplace_or_replace<EBO>(entity, obj);
         }
@@ -280,9 +270,7 @@ struct AABB {
     static auto emplace(entt::registry &world, entt::entity e, const std::vector<float> &vertices) -> AABB &
     {
         glm::dvec3 min = {
-            std::numeric_limits<double>::max(),
-            std::numeric_limits<double>::max(),
-            std::numeric_limits<double>::max()};
+            std::numeric_limits<double>::max(), std::numeric_limits<double>::max(), std::numeric_limits<double>::max()};
         glm::dvec3 max = {
             std::numeric_limits<double>::lowest(),
             std::numeric_limits<double>::lowest(),
@@ -364,15 +352,15 @@ struct AABB {
             });
         }
 
-        const auto outlined_cube_positions = std::to_array<float>(
-            {static_cast<float>(min.x), static_cast<float>(min.y), static_cast<float>(max.z),
-             static_cast<float>(max.x), static_cast<float>(min.y), static_cast<float>(max.z),
-             static_cast<float>(max.x), static_cast<float>(max.y), static_cast<float>(max.z),
-             static_cast<float>(min.x), static_cast<float>(max.y), static_cast<float>(max.z),
-             static_cast<float>(min.x), static_cast<float>(min.y), static_cast<float>(min.z),
-             static_cast<float>(max.x), static_cast<float>(min.y), static_cast<float>(min.z),
-             static_cast<float>(max.x), static_cast<float>(max.y), static_cast<float>(min.z),
-             static_cast<float>(min.x), static_cast<float>(max.y), static_cast<float>(min.z)});
+        const auto outlined_cube_positions =
+            std::to_array<float>({static_cast<float>(min.x), static_cast<float>(min.y), static_cast<float>(max.z),
+                                  static_cast<float>(max.x), static_cast<float>(min.y), static_cast<float>(max.z),
+                                  static_cast<float>(max.x), static_cast<float>(max.y), static_cast<float>(max.z),
+                                  static_cast<float>(min.x), static_cast<float>(max.y), static_cast<float>(max.z),
+                                  static_cast<float>(min.x), static_cast<float>(min.y), static_cast<float>(min.z),
+                                  static_cast<float>(max.x), static_cast<float>(min.y), static_cast<float>(min.z),
+                                  static_cast<float>(max.x), static_cast<float>(max.y), static_cast<float>(min.z),
+                                  static_cast<float>(min.x), static_cast<float>(max.y), static_cast<float>(min.z)});
 
         Render::VBO<Render::VAO::Attribute::POSITION>::emplace(world, aabb->guizmo, outlined_cube_positions, 3);
 
@@ -415,8 +403,7 @@ struct Mesh {
 
         if (!model) {
             // error
-            return world.emplace<Mesh>(
-                entity, filepath, std::filesystem::path(filepath).filename().string(), false);
+            return world.emplace<Mesh>(entity, filepath, std::filesystem::path(filepath).filename().string(), false);
         }
 
         const Render::VAO *vao{nullptr};
@@ -427,8 +414,7 @@ struct Mesh {
         Render::VBO<Render::VAO::Attribute::NORMALS>::emplace(world, entity, model->normals, 3);
         Render::EBO::emplace(world, entity, model->indices);
 
-        return world.emplace_or_replace<Mesh>(
-            entity, filepath, std::filesystem::path(filepath).filename().string(), true);
+        return world.emplace_or_replace<Mesh>(entity, filepath, std::filesystem::path(filepath).filename().string(), true);
     }
 };
 
@@ -461,8 +447,7 @@ struct Texture2D {
         CALL_OPEN_GL(::glGenTextures(1, &texture.textureID));
         CALL_OPEN_GL(::glBindTexture(GL_TEXTURE_2D, texture.textureID));
 
-        CALL_OPEN_GL(::glTexStorage2D(
-            GL_TEXTURE_2D, 1, GL_RGBA8, texture.ref_resource->width, texture.ref_resource->height));
+        CALL_OPEN_GL(::glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, texture.ref_resource->width, texture.ref_resource->height));
         CALL_OPEN_GL(::glTexSubImage2D(
             GL_TEXTURE_2D,
             0,
@@ -582,19 +567,17 @@ struct CameraData {
         const auto &pos = world.get<Position3f>(e);
         const auto &target = world.get<Position3f>(cam.target).component;
 
-        world.patch<Position3f>(e, [target, viewVec = totalRot * (pos.component - target)](auto &p) {
-            p.component = target + viewVec;
-        });
+        world.patch<Position3f>(
+            e, [target, viewVec = totalRot * (pos.component - target)](auto &p) { p.component = target + viewVec; });
         world.patch<CameraData>(e, [](auto &) {});
     }
 
     static auto zoom(entt::registry &world, entt::entity e, const CameraData &cam, double amount)
     {
         const auto &target = world.get<Position3f>(cam.target).component;
-        world.patch<Position3f>(
-            e, [scaleFactor = std::pow(2.0, -amount * DEFAULT_ZOOM_FRACTION), &target](auto &pos) {
-                pos.component = target + (pos.component - target) * scaleFactor;
-            });
+        world.patch<Position3f>(e, [scaleFactor = std::pow(2.0, -amount * DEFAULT_ZOOM_FRACTION), &target](auto &pos) {
+            pos.component = target + (pos.component - target) * scaleFactor;
+        });
         world.patch<CameraData>(e, [](auto &) {});
     }
 
@@ -604,13 +587,11 @@ struct CameraData {
         const auto &pos = world.get<Position3f>(e);
         const auto &target = world.get<Position3f>(cam.target).component;
 
-        const auto translateVec = parallelToViewPlane
-                                      ? (cam.imagePlaneHorizDir * (cam.display.x * amount.x))
-                                            + (cam.imagePlaneVertDir * (amount.y * cam.display.y))
-                                      : (target - pos.component) * amount.y;
+        const auto translateVec = parallelToViewPlane ? (cam.imagePlaneHorizDir * (cam.display.x * amount.x))
+                                                            + (cam.imagePlaneVertDir * (amount.y * cam.display.y))
+                                                      : (target - pos.component) * amount.y;
 
-        world.patch<Position3f>(
-            e, [&translateVec](auto &p) { p.component += translateVec * DEFAULT_TRANSLATE_SPEED; });
+        world.patch<Position3f>(e, [&translateVec](auto &p) { p.component += translateVec * DEFAULT_TRANSLATE_SPEED; });
 
         world.patch<Position3f>(cam.target, [&translateVec](auto &target_pos) {
             target_pos.component += translateVec * DEFAULT_TRANSLATE_SPEED;
